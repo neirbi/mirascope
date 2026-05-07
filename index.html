@@ -126,16 +126,27 @@ canvas {
 
 #validator {
   margin: var(--space-xs) 0 var(--space-md);
-  padding: var(--space-sm) clamp(0.75rem, 3vw, 1rem);
-  background: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: var(--radius);
-  font-family: var(--mono);
-  font-size: clamp(0.6rem, 1.6vw, 0.7rem);
-  line-height: 1.8;
+  padding: 0;
+  background: transparent;
   max-width: 50rem;
   width: 100%;
+  font-family: var(--mono);
+  line-height: 1;
 }
+
+.verdict {
+  padding: clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem);
+  margin-bottom: 2px;
+  font-family: var(--sans);
+  font-size: clamp(0.8rem, 2.2vw, 1rem);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.verdict--pass { background: #0a1a0a; border-left: 4px solid var(--pass); color: var(--pass); }
+.verdict--warn { background: #1a1500; border-left: 4px solid var(--warn); color: var(--warn); }
+.verdict--fail { background: #1a0a0a; border-left: 4px solid var(--fail); color: var(--fail); }
 
 .pass { color: var(--pass); }
 .fail { color: var(--fail); }
@@ -143,16 +154,50 @@ canvas {
 .dim { color: var(--text-muted); }
 
 .check-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-  border-bottom: 1px solid var(--border-dim);
-  padding: 0.15rem 0;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.75rem;
+  padding: 0.45rem clamp(0.75rem, 2vw, 1rem);
+  background: var(--card);
+  margin-bottom: 1px;
+  align-items: center;
+  font-size: clamp(0.65rem, 1.6vw, 0.75rem);
 }
 
-.check-label { color: var(--text-dim); flex: 1; min-width: 10rem; }
-.check-val { font-weight: 600; }
+.check-label {
+  color: var(--text-dim);
+  font-family: var(--sans);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.check-expected {
+  color: var(--text-muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.check-val {
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+  min-width: 5rem;
+}
+
+.check-summary {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  padding: 0.5rem clamp(0.75rem, 2vw, 1rem);
+  font-family: var(--sans);
+  font-size: clamp(0.65rem, 1.6vw, 0.75rem);
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--card);
+  margin-top: 1px;
+}
 
 .caption {
   max-width: 50rem;
@@ -1052,21 +1097,21 @@ function draw() {
 
   // Big verdict first — specific reason for failure
   if (hasFatal) {
-    html += `<div style="padding:8px;background:#300;border:2px solid #f00;margin-bottom:8px;text-align:center;font-size:14px;font-weight:bold;color:#f44;">NO REAL IMAGE — PHYSICS VIOLATED</div>`;
+    html += `<div class="verdict verdict--fail">NO REAL IMAGE — PHYSICS VIOLATED</div>`;
   } else if (imageTrapped && raysConverge) {
-    html += `<div style="padding:8px;background:#300;border:2px solid #f00;margin-bottom:8px;text-align:center;font-size:14px;font-weight:bold;color:#f44;">IMAGE TRAPPED INSIDE CAVITY — not visible</div>`;
+    html += `<div class="verdict verdict--fail">IMAGE TRAPPED INSIDE CAVITY — not visible</div>`;
   } else if (imageWayAbove && raysConverge) {
-    html += `<div style="padding:8px;background:#330;border:2px solid #f80;margin-bottom:8px;text-align:center;font-size:14px;font-weight:bold;color:#fa0;">IMAGE TOO FAR ABOVE APERTURE — ${ray_imgY !== null ? (ray_imgY - vy2).toFixed(0) : '?'}mm up</div>`;
+    html += `<div class="verdict verdict--warn">IMAGE TOO FAR ABOVE APERTURE — ${ray_imgY !== null ? (ray_imgY - vy2).toFixed(0) : '?'}mm up</div>`;
   } else if (!raysConverge && raysCompleted > 0) {
-    html += `<div style="padding:8px;background:#330;border:2px solid #f80;margin-bottom:8px;text-align:center;font-size:14px;font-weight:bold;color:#fa0;">RAYS DIVERGE — no convergence (spread: ${ray_spread.toFixed(1)}mm)</div>`;
+    html += `<div class="verdict verdict--fail">RAYS DIVERGE — no convergence (spread: ${ray_spread.toFixed(1)}mm)</div>`;
   } else if (!enoughRaysExit) {
-    html += `<div style="padding:8px;background:#330;border:2px solid #f80;margin-bottom:8px;text-align:center;font-size:14px;font-weight:bold;color:#fa0;">MOST RAYS TRAPPED — only ${exitPct.toFixed(0)}% exit aperture</div>`;
+    html += `<div class="verdict verdict--warn">MOST RAYS TRAPPED — only ${exitPct.toFixed(0)}% exit aperture</div>`;
   } else if (!imageFormed) {
-    html += `<div style="padding:8px;background:#330;border:2px solid #f80;margin-bottom:8px;text-align:center;font-size:14px;font-weight:bold;color:#fa0;">NO USABLE IMAGE</div>`;
+    html += `<div class="verdict verdict--warn">NO USABLE IMAGE</div>`;
   } else if (imageGood) {
-    html += `<div style="padding:8px;background:#030;border:2px solid #0f0;margin-bottom:8px;text-align:center;font-size:14px;font-weight:bold;color:#0f0;">${imagePerfect ? 'PERFECT' : 'GOOD'} REAL IMAGE FORMS</div>`;
+    html += `<div class="verdict verdict--pass">${imagePerfect ? 'PERFECT' : 'GOOD'} REAL IMAGE FORMS</div>`;
   } else {
-    html += `<div style="padding:8px;background:#332;border:2px solid #ff0;margin-bottom:8px;text-align:center;font-size:14px;font-weight:bold;color:#ff0;">DEGRADED IMAGE — visible but soft (spread: ${ray_spread.toFixed(1)}mm)</div>`;
+    html += `<div class="verdict verdict--warn">DEGRADED IMAGE — visible but soft (spread: ${ray_spread.toFixed(1)}mm)</div>`;
   }
 
   // Detail rows
@@ -1079,12 +1124,16 @@ function draw() {
     if (c.ok) passCount++; else if (isWarn) warnCount++; else failCount++;
     html += `<div class="check-row">
       <span class="check-label">${icon} ${c.label}</span>
-      <span class="dim">exp: ${c.expected}${c.unit}</span>
+      <span class="check-expected">${c.expected}${c.unit}</span>
       <span class="${cls} check-val">${c.got}${c.unit}</span>
     </div>`;
   }
 
-  html += `<div style="margin-top:6px;font-size:10px;color:#666;">${passCount} pass · ${warnCount} warn · ${failCount} fail</div>`;
+  html += `<div class="check-summary">
+    <span class="pass">${passCount} pass</span>
+    <span class="warn">${warnCount} warn</span>
+    <span class="fail">${failCount} fail</span>
+  </div>`;
 
   document.getElementById('validator').innerHTML = html;
 }
