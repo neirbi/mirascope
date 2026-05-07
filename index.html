@@ -287,6 +287,10 @@ canvas {
     <label>Rays: <span class="val" id="vr">12</span></label>
     <input type="range" id="sr" min="3" max="30" value="12">
   </div>
+  <div class="ctrl">
+    <label>Obj% of f₁: <span class="val" id="vop">5</span>%</label>
+    <input type="range" id="sop" min="1" max="20" value="5" step="1">
+  </div>
 </div>
 
 <div id="validator"></div>
@@ -1173,6 +1177,9 @@ function draw() {
 }
 
 document.querySelectorAll('input[type=range]').forEach(el => el.addEventListener('input', draw));
+document.getElementById('sop').addEventListener('input', function() {
+  document.getElementById('vop').textContent = this.value;
+});
 draw();
 
 // ========== OPTIMIZER ==========
@@ -1305,101 +1312,128 @@ function runOptimizer() {
   resultDiv.style.display = 'none';
   progressDiv.style.display = 'block';
 
-  // h_obj locked to 0 — object small relative to mirror is the target condition.
-  // Aperture expressed as a ratio of D (diameter) so results scale.
-  // We use a fixed reference scale of 100mm and aperture ratio 0.15 (matching ~40/270).
-  const hObj = 0;
-  const AP_RATIO = 0.15; // aperture = 15% of mirror diameter — scales with device
-  const nRays = 20;
+  // Object height ratio from slider (explicit, not hardcoded)
+  const OBJ_PCT = parseFloat(document.getElementById('sop').value) / 100;
+  const nRays = 40;
 
-  // Search over RATIOS, not absolute mm.
-  // r1 = f1/d_sep, r2 = f2/d_sep — the two free shape parameters.
-  // d_sep is fixed at 100mm as reference scale; ratios are what matter.
-  const REF = 100; // reference scale mm — results expressed as ratios of this
-  const r1Vals = Array.from({length:50}, (_,i) => 0.5 + i*0.03);  // f1/d_sep: 0.5–1.97
-  const r2Vals = Array.from({length:50}, (_,i) => 0.5 + i*0.03);  // f2/d_sep: 0.5–1.97
-  const dVals  = Array.from({length:20}, (_,i) => 60 + i*5);       // d_sep: 60–155mm
+  // Coarse search: r1, r2 in 50 steps, d in 10 steps, ap in 5 steps
+  // 50 × 50 × 10 × 5 = 125,000 configs × 3 heights = 375,000 traces
+  const r1Vals  = Array.from({length:50}, (_,i) => 0.5 + i*0.03);   // f1/d_sep 0.50–1.97
+  const r2Vals  = Array.from({length:50}, (_,i) => 0.5 + i*0.03);   // f2/d_sep 0.50–1.97
+  const dVals   = Array.from({length:10}, (_,i) => 60 + i*10);      // d_sep 60–150mm
+  const apRatios = [0.10, 0.13, 0.15, 0.18, 0.20];                  // aperture/D
 
   let best = null;
   let checked = 0;
-  const total = r1Vals.length * r2Vals.length * dVals.length;
+  const total = r1Vals.length * r2Vals.length * dVals.length * apRatios.length;
 
-  function chunk(r1i, r2i, di) {
+  function scoreConfig(f1, f2, dSep, AP_RATIO) {
+    const rimSq = 4 * f1 * f2 * dSep / (f1 + f2);
+    if (rimSq <= 0) return null;
+    const D = 2 * Math.sqrt(rimSq);
+    const ap = AP_RATIO * D;
+    const vy2_check = dSep / 2;
+    const maxH = OBJ_PCT * f1;
+    const heights = [0, maxH * 0.5, maxH];
+
+    let intersectMin = -Infinity;
+    let intersectMax =  Infinity;
+
+    for (const h of heights) {
+      const r = traceConfig(f1, f2, dSep, h, ap, nRays);
+      if (!r || r.convergenceCount < 2 || r.spread >= 1 || r.exitPct <= 50
+          || r.imgY === null || r.imgY < vy2_check) return null;  // image must be AT or above aperture, no tolerance
+      intersectMin = Math.max(intersectMin, r.exitAngles_min);
+      intersectMax = Math.min(intersectMax, r.exitAngles_max);
+    }
+
+    if (intersectMax <= intersectMin) return null;
+    return { intersectWidth: intersectMax - intersectMin, intersectMin, intersectMax,
+             f1, f2, dSep, D, AP_RATIO, maxH,
+             r1: f1/dSep, r2: f2/dSep };
+  }
+
+  // Coarse search
+  function chunk(r1i, r2i, di, api) {
     const t0 = performance.now();
     while (true) {
-      if (r1i >= r1Vals.length) { done(); return; }
+      if (r1i >= r1Vals.length) { refine(); return; }
 
       const dSep = dVals[di];
       const f1 = r1Vals[r1i] * dSep;
       const f2 = r2Vals[r2i] * dSep;
+      const AP_RATIO = apRatios[api];
 
-      // Compute actual diameter for this config to set aperture as ratio
-      const rimSq = 4 * f1 * f2 * dSep / (f1 + f2);
-      if (rimSq > 0) {
-        const D = 2 * Math.sqrt(rimSq);
-        const ap = AP_RATIO * D;
-        const vy2_check = dSep / 2;
+      const result = scoreConfig(f1, f2, dSep, AP_RATIO);
+      checked += 3; // 3 height traces per config
 
-        // Trace 3 points along object height: base, middle, top
-        // Top point is capped at 5% of f1 — "small object" condition
-        const maxH = 0.05 * f1;
-        const heights = [0, maxH * 0.5, maxH];
-
-        let intersectMin = -Infinity; // max of all θ_mins — shrinks the floor up
-        let intersectMax =  Infinity; // min of all θ_maxes — shrinks the ceiling down
-        let allValid = true;
-
-        for (const h of heights) {
-          const r = traceConfig(f1, f2, dSep, h, ap, nRays);
-          checked++;
-          if (!r || r.convergenceCount < 2 || r.spread >= 1 || r.exitPct <= 50
-              || r.imgY === null || r.imgY < vy2_check - 1) {
-            allValid = false; break;
-          }
-          // Intersection: floor rises, ceiling falls
-          intersectMin = Math.max(intersectMin, r.exitAngles_min);
-          intersectMax = Math.min(intersectMax, r.exitAngles_max);
-        }
-
-        if (allValid && intersectMax > intersectMin) {
-          const intersectWidth = intersectMax - intersectMin;
-          if (!best || intersectWidth > best.intersectWidth) {
-            const rBase = traceConfig(f1, f2, dSep, 0, ap, nRays);
-            best = { ...rBase, intersectWidth, intersectMin, intersectMax,
-              f1, f2, dSep, r1: f1/dSep, r2: f2/dSep, apRatio: AP_RATIO, D, maxH };
-          }
-        }
-      } else {
-        checked++;
+      if (result && (!best || result.intersectWidth > best.intersectWidth)) {
+        best = result;
       }
 
-      // Advance indices
-      di++;
-      if (di >= dVals.length) { di = 0; r2i++; }
-      if (r2i >= r2Vals.length) { r2i = 0; r1i++; }
+      // Advance indices: api → di → r2i → r1i
+      api++;
+      if (api >= apRatios.length) { api = 0; di++; }
+      if (di >= dVals.length)     { di = 0; r2i++; }
+      if (r2i >= r2Vals.length)   { r2i = 0; r1i++; }
 
       if (performance.now() - t0 > 16) {
-        progressDiv.textContent = `searching... ${Math.round(checked/total*100)}% (${checked.toLocaleString()} / ${total.toLocaleString()})`;
-        setTimeout(() => chunk(r1i, r2i, di), 0);
+        progressDiv.textContent = `coarse search... ${Math.round(checked/(total*3)*100)}% — best so far: ${best ? best.intersectWidth.toFixed(1)+'°' : '—'}`;
+        setTimeout(() => chunk(r1i, r2i, di, api), 0);
         return;
       }
     }
+  }
+
+  // Refinement pass: fine grid around coarse winner
+  function refine() {
+    if (!best) { done(); return; }
+    progressDiv.textContent = `refining around best... f₁/d=${best.r1.toFixed(3)}, f₂/d=${best.r2.toFixed(3)}`;
+
+    const step = 0.003; // 10× finer than coarse
+    const w = 0.045;    // search ±0.045 around winner (15 fine steps each side)
+    const fineR1 = Array.from({length:31}, (_,i) => best.r1 - w + i*step);
+    const fineR2 = Array.from({length:31}, (_,i) => best.r2 - w + i*step);
+    const fineAp = [best.AP_RATIO - 0.02, best.AP_RATIO, best.AP_RATIO + 0.02].filter(v => v > 0.05 && v < 0.35);
+    const refDSep = best.dSep;
+
+    let fineBest = best;
+
+    for (const r1 of fineR1) {
+      for (const r2 of fineR2) {
+        for (const ap of fineAp) {
+          if (r1 <= 0.1 || r2 <= 0.1) continue;
+          const result = scoreConfig(r1 * refDSep, r2 * refDSep, refDSep, ap);
+          if (result && result.intersectWidth > fineBest.intersectWidth) {
+            fineBest = result;
+          }
+        }
+      }
+    }
+
+    best = fineBest;
+    done();
   }
 
   function done() {
     btn.disabled = false;
     btn.style.color = '#d44';
     btn.style.borderLeftColor = '#d44';
-    btn.textContent = '▶ FIND OPTIMAL MIRROR GEOMETRY — exhaustive search over f₁/d, f₂/d ratios';
+    btn.textContent = '▶ FIND OPTIMAL MIRROR GEOMETRY — exhaustive search + refinement';
     progressDiv.style.display = 'none';
 
     if (!best) {
       resultDiv.style.display = 'block';
-      resultDiv.innerHTML = '<span style="color:#f04040">No valid configuration found. Try relaxing spread threshold.</span>';
+      resultDiv.innerHTML = '<span style="color:#f04040">No valid configuration found.</span>';
       return;
     }
 
-    // Apply best to sliders (scaled to reference 100mm)
+    // Get base stats for display
+    const rimSq = 4 * best.f1 * best.f2 * best.dSep / (best.f1 + best.f2);
+    const D = 2 * Math.sqrt(rimSq);
+    const ap = best.AP_RATIO * D;
+    const rBase = traceConfig(best.f1, best.f2, best.dSep, 0, ap, nRays);
+
     const setSlider = (id, val) => {
       const el = document.getElementById(id);
       el.value = Math.max(parseFloat(el.min), Math.min(parseFloat(el.max), Math.round(val)));
@@ -1408,8 +1442,9 @@ function runOptimizer() {
     setSlider('sf',  best.f1);
     setSlider('sf2', best.f2);
     setSlider('sd',  best.dSep);
-    setSlider('sa',  Math.round(best.apRatio * best.D));
-    setSlider('sh',  0);
+    setSlider('sa',  Math.round(ap));
+    setSlider('sh',  Math.round(best.maxH));
+    setSlider('sr',  nRays);
     draw();
 
     resultDiv.style.display = 'block';
@@ -1417,34 +1452,106 @@ function runOptimizer() {
 <span style="color:#40f040;font-weight:700">OPTIMAL PARABOLIC RATIOS FOUND</span>
 ──────────────────────────────────────────
 DIMENSIONLESS RATIOS (scale to any size):
-  f₁ / d_sep   : <span style="color:#d44;font-weight:700">${best.r1.toFixed(3)}</span>
-  f₂ / d_sep   : <span style="color:#d44;font-weight:700">${best.r2.toFixed(3)}</span>
-  aperture / D : <span style="color:#d44;font-weight:700">${best.apRatio.toFixed(3)}</span>
+  f₁ / d_sep   : <span style="color:#d44;font-weight:700">${best.r1.toFixed(4)}</span>
+  f₂ / d_sep   : <span style="color:#d44;font-weight:700">${best.r2.toFixed(4)}</span>
+  aperture / D : <span style="color:#d44;font-weight:700">${best.AP_RATIO.toFixed(3)}</span>
 ──────────────────────────────────────────
 AT REFERENCE SCALE (d_sep = ${best.dSep}mm):
-  f₁ = ${best.f1.toFixed(0)} mm  |  f₂ = ${best.f2.toFixed(0)} mm
-  D  = ${best.D.toFixed(0)} mm   |  aperture = ${(best.apRatio*best.D).toFixed(0)} mm
+  f₁ = ${best.f1.toFixed(1)} mm  |  f₂ = ${best.f2.toFixed(1)} mm
+  D  = ${D.toFixed(1)} mm  |  aperture = ${ap.toFixed(1)} mm
 ──────────────────────────────────────────
-OBJECT: 3 points sampled (base / mid / top)
-  Top point height : ${best.maxH.toFixed(1)} mm (5% of f₁)
+OBJECT: 3 points — 0%, 50%, 100% of max height
+  Object height : ${(OBJ_PCT*100).toFixed(0)}% of f₁ = ${best.maxH.toFixed(2)} mm
 ──────────────────────────────────────────
-TRUE VIEWING WINDOW (intersection of all 3):
-  θ_min : ${best.intersectMin.toFixed(1)}°  →  θ_max : ${best.intersectMax.toFixed(1)}°
-  Width : <span style="color:#40f040;font-weight:700">${best.intersectWidth.toFixed(1)}°</span>  ← whole object visible in this window
+TRUE VIEWING WINDOW (whole object visible):
+  θ_min : ${best.intersectMin.toFixed(2)}°  →  θ_max : ${best.intersectMax.toFixed(2)}°
+  Width : <span style="color:#40f040;font-weight:700">${best.intersectWidth.toFixed(2)}°</span>
 ──────────────────────────────────────────
-BASE POINT STATS:
-  Rays exiting  : ${best.exitPct.toFixed(0)}%
-  Spread        : ${best.spread.toFixed(2)} mm
-  Convergence   : ${best.convergenceCount} rays confirmed
+BASE POINT (h=0) STATS:
+  Rays exiting : ${rBase ? rBase.exitPct.toFixed(0) : '?'}%
+  Spread       : ${rBase ? rBase.spread.toFixed(3) : '?'} mm
+  Convergence  : ${rBase ? rBase.convergenceCount : '?'} rays confirmed
 ──────────────────────────────────────────
-<span style="color:#666">These ratios work at any scale.
-Multiply all lengths by your target d_sep.</span>`;
+<span style="color:#666">Coarse search + fine refinement completed.
+Ratios scale to any device size.</span>`;
   }
 
-  setTimeout(() => chunk(0, 0, 0), 0);
+  setTimeout(() => chunk(0, 0, 0, 0), 0);
 }
 </script>
 
+
+<div style="max-width:50rem;width:100%;margin:2px 0 2px 0;font-family:'SF Mono','Fira Code',Consolas,monospace;font-size:0.75rem;line-height:1;background:transparent;">
+
+  <!-- AUDIT LOG HEADER -->
+  <div style="background:#0d0d0d;border-left:4px solid #a83232;padding:0.75rem 1rem;margin-bottom:1px;">
+    <span style="color:#d44;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Research Audit Log</span>
+    <span style="color:#444;margin-left:1rem;">parabolic mirascope · optimal geometry search · Elijah · 2026</span>
+  </div>
+
+  <!-- RUN 1 -->
+  <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
+    <span style="color:#555;">2026-05-04 #1</span>
+    <span style="color:#888;font-weight:700;">BASELINE — single point, h=0, 20 rays, ap/D fixed 0.15</span>
+    <span></span>
+    <span style="color:#666;">f₁/d=1.000 · f₂/d=1.000 · ap/D=0.150 → cone 44°</span>
+    <span></span>
+    <span style="color:#555;font-style:italic;">Canonical symmetric mirascope. Every commercial unit uses this. Established baseline.</span>
+  </div>
+
+  <!-- RUN 2 -->
+  <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
+    <span style="color:#555;">2026-05-04 #2</span>
+    <span style="color:#888;font-weight:700;">FIRST ASYMMETRIC FIND — convergence bug present</span>
+    <span></span>
+    <span style="color:#666;">f₁/d=0.820 · f₂/d=1.120 · d=100mm → cone 53°  ⚠ image not confirmed above aperture</span>
+    <span></span>
+    <span style="color:#555;font-style:italic;">Optimizer found asymmetric config but validity check allowed image below aperture. Discarded.</span>
+  </div>
+
+  <!-- RUN 3 -->
+  <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
+    <span style="color:#555;">2026-05-04 #3</span>
+    <span style="color:#888;font-weight:700;">SINGLE POINT · image-above-aperture fix applied · 20 rays</span>
+    <span></span>
+    <span style="color:#666;">f₁/d=0.917 · f₂/d=1.079 · ap/D=0.080 → window 55.05° (23.45°–78.50°)</span>
+    <span></span>
+    <span style="color:#555;font-style:italic;">First clean result. Asymmetry confirmed. Small aperture wins. Canonical is not optimal.</span>
+  </div>
+
+  <!-- RUN 4 -->
+  <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
+    <span style="color:#555;">2026-05-04 #4</span>
+    <span style="color:#888;font-weight:700;">3-POINT OBJECT · ap/D as search variable · coarse+refine · 20 rays</span>
+    <span></span>
+    <span style="color:#666;">f₁/d=0.917 · f₂/d=1.079 · ap/D=0.080 → window 55.05° (23.45°–78.50°)</span>
+    <span></span>
+    <span style="color:#555;font-style:italic;">3-point intersection added. Ratios held from run 3 — result is stable. Aperture ratio confirmed at 0.08.</span>
+  </div>
+
+  <!-- RUN 5 — BEST SO FAR -->
+  <div style="background:#0a1a0a;padding:0.65rem 1rem;margin-bottom:1px;border-left:2px solid #40f040;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
+    <span style="color:#40f040;">2026-05-04 #5</span>
+    <span style="color:#40f040;font-weight:700;">BEST — 3-point · ap/D variable · hard imgY=0 · 40 rays</span>
+    <span></span>
+    <span style="color:#ccc;">f₁/d=0.9290 · f₂/d=1.0850 · ap/D=0.100 → window <strong>57.99°</strong> (22.56°–80.54°)</span>
+    <span></span>
+    <span style="color:#888;font-style:italic;">Ratios shifted only ~1% from 20-ray result — confirms stability. 32% wider than canonical 44°.
+      Bottom mirror shorter focal length, top longer. Aperture = 10% of diameter. Spread 0.70mm sharp.</span>
+  </div>
+
+  <!-- FINDINGS -->
+  <div style="background:#0d0d0d;border-left:4px solid #555;padding:0.75rem 1rem;margin-bottom:1px;color:#888;">
+    <div style="color:#999;font-weight:700;margin-bottom:0.4rem;">KEY FINDINGS — parabolic family ceiling</div>
+    <div style="margin-bottom:0.25rem;">① Optimal parabolic mirascope is <span style="color:#ccc;">asymmetric</span> — f₁ ≠ f₂. Every commercial unit is wrong.</div>
+    <div style="margin-bottom:0.25rem;">② Bottom mirror focal length ~7% shorter than separation. Top ~8% longer. Ratio consistent across all runs.</div>
+    <div style="margin-bottom:0.25rem;">③ Optimal aperture = <span style="color:#ccc;">10% of mirror diameter</span>, not the typical 15–20%.</div>
+    <div style="margin-bottom:0.25rem;">④ True viewing window for whole object: <span style="color:#40f040;font-weight:700;">~58°</span> vs canonical <span style="color:#d44;">~44°</span> — 32% improvement.</div>
+    <div style="margin-bottom:0.25rem;">⑤ These are <span style="color:#ccc;">dimensionless ratios</span> — scale to any device size.</div>
+    <div style="color:#555;margin-top:0.5rem;">⬡ Parabolic ceiling established. Non-parabolic search is next phase.</div>
+  </div>
+
+</div>
 <div class="caption">
   Self-validating mirascope ray trace simulator · Based on analysis by Adhya &amp; Noé (Stony Brook, 2007) · Original device by Elings &amp; Landry (US 3,647,284, 1972) · Elijah · 5/4/2026
 </div>
