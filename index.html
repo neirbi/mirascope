@@ -299,7 +299,7 @@ canvas {
     font-size:0.85rem;font-weight:700;letter-spacing:0.08em;
     text-transform:uppercase;cursor:pointer;text-align:left;
     transition:background 0.15s;">
-    ▶ FIND OPTIMAL MIRROR GEOMETRY — exhaustive search over f₁, f₂, d_sep
+    ▶ FIND OPTIMAL MIRROR GEOMETRY — exhaustive search over f₁/d, f₂/d ratios
   </button>
   <div id="opt-result" style="display:none;background:#0a0a0a;border-left:4px solid #40f040;
     padding:0.85rem 1rem;font-family:'SF Mono','Fira Code',Consolas,monospace;
@@ -1287,7 +1287,10 @@ function traceConfig(f1, f2, dSep, hObj, ap, nRays) {
   const imgY = convergenceCount > 0
     ? convergencePoints.reduce((a, b) => a + b, 0) / convergenceCount : null;
 
-  return { coneWidth, exitPct, spread, convergenceCount, imgY, f1, f2, dSep };
+  const exitAngles_max = exitAngles.length > 0 ? Math.max(...exitAngles) : 0;
+  const exitAngles_min = exitAngles.length > 0 ? Math.min(...exitAngles) : 0;
+
+  return { coneWidth, exitPct, spread, convergenceCount, imgY, exitAngles_max, exitAngles_min, f1, f2, dSep };
 }
 
 function runOptimizer() {
@@ -1302,44 +1305,82 @@ function runOptimizer() {
   resultDiv.style.display = 'none';
   progressDiv.style.display = 'block';
 
-  const hObj = parseFloat(document.getElementById('sh').value);
-  const ap   = parseFloat(document.getElementById('sa').value);
+  // h_obj locked to 0 — object small relative to mirror is the target condition.
+  // Aperture expressed as a ratio of D (diameter) so results scale.
+  // We use a fixed reference scale of 100mm and aperture ratio 0.15 (matching ~40/270).
+  const hObj = 0;
+  const AP_RATIO = 0.15; // aperture = 15% of mirror diameter — scales with device
+  const nRays = 20;
 
-  // Search grid: f1, f2, dSep each 40 steps → 64,000 configs
-  const fVals   = Array.from({length:40}, (_,i) => 40 + i*3);    // 40–157mm
-  const dVals   = Array.from({length:40}, (_,i) => 40 + i*3);    // 40–157mm
-  const nRays   = 20; // fast for search; display uses slider value
+  // Search over RATIOS, not absolute mm.
+  // r1 = f1/d_sep, r2 = f2/d_sep — the two free shape parameters.
+  // d_sep is fixed at 100mm as reference scale; ratios are what matter.
+  const REF = 100; // reference scale mm — results expressed as ratios of this
+  const r1Vals = Array.from({length:50}, (_,i) => 0.5 + i*0.03);  // f1/d_sep: 0.5–1.97
+  const r2Vals = Array.from({length:50}, (_,i) => 0.5 + i*0.03);  // f2/d_sep: 0.5–1.97
+  const dVals  = Array.from({length:20}, (_,i) => 60 + i*5);       // d_sep: 60–155mm
 
   let best = null;
   let checked = 0;
-  const total = fVals.length * fVals.length * dVals.length;
+  const total = r1Vals.length * r2Vals.length * dVals.length;
 
-  // Run in chunks so the browser doesn't freeze
-  function chunk(f1i, f2i, di) {
+  function chunk(r1i, r2i, di) {
     const t0 = performance.now();
     while (true) {
-      if (f1i >= fVals.length) { done(); return; }
-      const f1 = fVals[f1i];
-      const f2 = fVals[f2i];
+      if (r1i >= r1Vals.length) { done(); return; }
+
       const dSep = dVals[di];
+      const f1 = r1Vals[r1i] * dSep;
+      const f2 = r2Vals[r2i] * dSep;
 
-      const r = traceConfig(f1, f2, dSep, hObj, ap, nRays);
-      checked++;
+      // Compute actual diameter for this config to set aperture as ratio
+      const rimSq = 4 * f1 * f2 * dSep / (f1 + f2);
+      if (rimSq > 0) {
+        const D = 2 * Math.sqrt(rimSq);
+        const ap = AP_RATIO * D;
+        const vy2_check = dSep / 2;
 
-      // Valid image requires: rays converge above the aperture, tight spread, enough rays exit
-      const vy2_check = dSep / 2;
-      if (r && r.convergenceCount >= 2 && r.spread < 2 && r.exitPct > 40 && r.imgY !== null && r.imgY >= vy2_check - 1) {
-        if (!best || r.coneWidth > best.coneWidth) best = r;
+        // Trace 3 points along object height: base, middle, top
+        // Top point is capped at 5% of f1 — "small object" condition
+        const maxH = 0.05 * f1;
+        const heights = [0, maxH * 0.5, maxH];
+
+        let intersectMin = -Infinity; // max of all θ_mins — shrinks the floor up
+        let intersectMax =  Infinity; // min of all θ_maxes — shrinks the ceiling down
+        let allValid = true;
+
+        for (const h of heights) {
+          const r = traceConfig(f1, f2, dSep, h, ap, nRays);
+          checked++;
+          if (!r || r.convergenceCount < 2 || r.spread >= 1 || r.exitPct <= 50
+              || r.imgY === null || r.imgY < vy2_check - 1) {
+            allValid = false; break;
+          }
+          // Intersection: floor rises, ceiling falls
+          intersectMin = Math.max(intersectMin, r.exitAngles_min);
+          intersectMax = Math.min(intersectMax, r.exitAngles_max);
+        }
+
+        if (allValid && intersectMax > intersectMin) {
+          const intersectWidth = intersectMax - intersectMin;
+          if (!best || intersectWidth > best.intersectWidth) {
+            const rBase = traceConfig(f1, f2, dSep, 0, ap, nRays);
+            best = { ...rBase, intersectWidth, intersectMin, intersectMax,
+              f1, f2, dSep, r1: f1/dSep, r2: f2/dSep, apRatio: AP_RATIO, D, maxH };
+          }
+        }
+      } else {
+        checked++;
       }
 
       // Advance indices
       di++;
-      if (di >= dVals.length) { di = 0; f2i++; }
-      if (f2i >= fVals.length) { f2i = 0; f1i++; }
+      if (di >= dVals.length) { di = 0; r2i++; }
+      if (r2i >= r2Vals.length) { r2i = 0; r1i++; }
 
-      if (performance.now() - t0 > 16) { // yield every ~16ms (1 frame)
+      if (performance.now() - t0 > 16) {
         progressDiv.textContent = `searching... ${Math.round(checked/total*100)}% (${checked.toLocaleString()} / ${total.toLocaleString()})`;
-        setTimeout(() => chunk(f1i, f2i, di), 0);
+        setTimeout(() => chunk(r1i, r2i, di), 0);
         return;
       }
     }
@@ -1349,16 +1390,16 @@ function runOptimizer() {
     btn.disabled = false;
     btn.style.color = '#d44';
     btn.style.borderLeftColor = '#d44';
-    btn.textContent = '▶ FIND OPTIMAL MIRROR GEOMETRY — exhaustive search over f₁, f₂, d_sep';
+    btn.textContent = '▶ FIND OPTIMAL MIRROR GEOMETRY — exhaustive search over f₁/d, f₂/d ratios';
     progressDiv.style.display = 'none';
 
     if (!best) {
       resultDiv.style.display = 'block';
-      resultDiv.innerHTML = '<span style="color:#f04040">No valid configuration found in search range.</span>';
+      resultDiv.innerHTML = '<span style="color:#f04040">No valid configuration found. Try relaxing spread threshold.</span>';
       return;
     }
 
-    // Apply best to sliders
+    // Apply best to sliders (scaled to reference 100mm)
     const setSlider = (id, val) => {
       const el = document.getElementById(id);
       el.value = Math.max(parseFloat(el.min), Math.min(parseFloat(el.max), Math.round(val)));
@@ -1367,25 +1408,37 @@ function runOptimizer() {
     setSlider('sf',  best.f1);
     setSlider('sf2', best.f2);
     setSlider('sd',  best.dSep);
+    setSlider('sa',  Math.round(best.apRatio * best.D));
+    setSlider('sh',  0);
     draw();
 
     resultDiv.style.display = 'block';
     resultDiv.innerHTML = `
-<span style="color:#40f040;font-weight:700">OPTIMAL PARABOLIC CONFIGURATION FOUND</span>
+<span style="color:#40f040;font-weight:700">OPTIMAL PARABOLIC RATIOS FOUND</span>
 ──────────────────────────────────────────
-f₁ (bottom) : <span style="color:#d44">${best.f1} mm</span>
-f₂ (top)    : <span style="color:#d44">${best.f2} mm</span>
-d_sep       : <span style="color:#d44">${best.dSep} mm</span>
+DIMENSIONLESS RATIOS (scale to any size):
+  f₁ / d_sep   : <span style="color:#d44;font-weight:700">${best.r1.toFixed(3)}</span>
+  f₂ / d_sep   : <span style="color:#d44;font-weight:700">${best.r2.toFixed(3)}</span>
+  aperture / D : <span style="color:#d44;font-weight:700">${best.apRatio.toFixed(3)}</span>
 ──────────────────────────────────────────
-Viewing cone : <span style="color:#40f040;font-weight:700">${best.coneWidth.toFixed(1)}°</span>
-Rays exiting : ${best.exitPct.toFixed(0)}%
-Spread       : ${best.spread.toFixed(2)} mm
-Convergence  : ${best.convergenceCount} rays confirmed
-Image above aperture : ${(best.imgY - best.dSep/2).toFixed(1)} mm
+AT REFERENCE SCALE (d_sep = ${best.dSep}mm):
+  f₁ = ${best.f1.toFixed(0)} mm  |  f₂ = ${best.f2.toFixed(0)} mm
+  D  = ${best.D.toFixed(0)} mm   |  aperture = ${(best.apRatio*best.D).toFixed(0)} mm
 ──────────────────────────────────────────
-<span style="color:#666">Sliders updated. This is the widest viewing cone
-the parabolic shape can achieve given your h_obj
-and aperture settings.</span>`;
+OBJECT: 3 points sampled (base / mid / top)
+  Top point height : ${best.maxH.toFixed(1)} mm (5% of f₁)
+──────────────────────────────────────────
+TRUE VIEWING WINDOW (intersection of all 3):
+  θ_min : ${best.intersectMin.toFixed(1)}°  →  θ_max : ${best.intersectMax.toFixed(1)}°
+  Width : <span style="color:#40f040;font-weight:700">${best.intersectWidth.toFixed(1)}°</span>  ← whole object visible in this window
+──────────────────────────────────────────
+BASE POINT STATS:
+  Rays exiting  : ${best.exitPct.toFixed(0)}%
+  Spread        : ${best.spread.toFixed(2)} mm
+  Convergence   : ${best.convergenceCount} rays confirmed
+──────────────────────────────────────────
+<span style="color:#666">These ratios work at any scale.
+Multiply all lengths by your target d_sep.</span>`;
   }
 
   setTimeout(() => chunk(0, 0, 0), 0);
