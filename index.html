@@ -1,447 +1,926 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mirascope Formula Sheet</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<title>Mirascope Ray Trace — Self-Validating</title>
 <style>
-  :root {
-    --bg: #0a0a0a;
-    --card: #141414;
-    --border: #2a2a2a;
-    --text: #e0e0e0;
-    --dim: #888;
-    --accent: #f0c040;
-    --accent2: #40a0f0;
-    --accent3: #60d060;
-    --red: #f06060;
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'IBM Plex Sans', sans-serif;
-    padding: 32px;
-    max-width: 900px;
-    margin: 0 auto;
-    line-height: 1.5;
-  }
-
-  h1 {
-    font-size: 28px;
-    font-weight: 700;
-    color: var(--accent);
-    margin-bottom: 4px;
-    letter-spacing: -0.5px;
-  }
-
-  .subtitle {
-    color: var(--dim);
-    font-size: 14px;
-    margin-bottom: 32px;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 16px;
-  }
-
-  .section {
-    margin-bottom: 28px;
-  }
-
-  .section-title {
-    font-size: 13px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    color: var(--accent2);
-    margin-bottom: 12px;
-  }
-
-  .formula-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
-
-  .formula-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 14px 16px;
-  }
-
-  .formula-card.full {
-    grid-column: 1 / -1;
-  }
-
-  .formula-label {
-    font-size: 12px;
-    color: var(--dim);
-    margin-bottom: 6px;
-  }
-
-  .formula {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--text);
-    line-height: 1.6;
-  }
-
-  .formula .var {
-    color: var(--accent);
-  }
-
-  .formula .eq {
-    color: var(--dim);
-    margin: 0 4px;
-  }
-
-  .formula .note {
-    font-size: 12px;
-    font-weight: 400;
-    color: var(--dim);
-    display: block;
-    margin-top: 4px;
-  }
-
-  .master {
-    border-color: var(--accent);
-    border-width: 2px;
-    background: #1a1608;
-  }
-
-  .master .formula {
-    font-size: 20px;
-    color: var(--accent);
-  }
-
-  .constraint {
-    border-left: 3px solid var(--red);
-  }
-
-  .constraint .formula {
-    color: var(--red);
-  }
-
-  .invariant {
-    border-left: 3px solid var(--accent3);
-  }
-
-  .invariant .formula {
-    color: var(--accent3);
-  }
-
-  .divider {
-    border: none;
-    border-top: 1px solid var(--border);
-    margin: 24px 0;
-  }
-
-  .legend {
-    display: flex;
-    gap: 20px;
-    font-size: 12px;
-    color: var(--dim);
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-  }
-
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .legend-swatch {
-    width: 12px;
-    height: 12px;
-    border-radius: 2px;
-  }
-
-  .var-table {
-    display: grid;
-    grid-template-columns: 60px 1fr;
-    gap: 2px 12px;
-    font-size: 13px;
-    margin-bottom: 8px;
-  }
-
-  .var-table .v {
-    font-family: 'IBM Plex Mono', monospace;
-    color: var(--accent);
-    font-weight: 600;
-  }
-
-  .var-table .d {
-    color: var(--dim);
-  }
-
-  @media (max-width: 600px) {
-    body { padding: 16px; }
-    .formula-grid { grid-template-columns: 1fr; }
-    .formula { font-size: 14px; }
-  }
+body { margin: 0; background: #111; display: flex; flex-direction: column; align-items: center; font-family: monospace; color: #ccc; }
+canvas { border: 1px solid #333; margin-top: 16px; }
+.controls { margin: 12px; display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+.ctrl { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; }
+.ctrl input { width: 120px; }
+.val { color: #f0c040; font-weight: bold; }
+#validator {
+  margin: 8px 16px 16px;
+  padding: 12px 16px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.8;
+  max-width: 780px;
+  width: 100%;
+}
+.pass { color: #40f040; }
+.fail { color: #f04040; }
+.warn { color: #f0a040; }
+.dim { color: #666; }
+.check-row { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px solid #222; padding: 2px 0; }
+.check-label { color: #999; flex: 1; }
+.check-val { font-weight: bold; }
 </style>
 </head>
 <body>
 
-<h1>Mirascope — Canonical Formula Sheet</h1>
-<p class="subtitle">All formulas assume f₁ = f₂ = d_sep (canonical configuration). Plug and play.</p>
+<canvas id="c" width="800" height="500"></canvas>
 
-<div class="section">
-  <div class="section-title">Variables</div>
-  <div class="var-table">
-    <span class="v">D</span><span class="d">full mirror diameter (rim to rim)</span>
-    <span class="v">d</span><span class="d">dish depth (vertex to rim plane, aka sagitta)</span>
-    <span class="v">f</span><span class="d">focal length</span>
-    <span class="v">d_sep</span><span class="d">vertex-to-vertex distance between mirrors</span>
-    <span class="v">A</span><span class="d">aperture diameter (hole in upper mirror)</span>
-    <span class="v">h_obj</span><span class="d">object height above M1 vertex</span>
-    <span class="v">h_img</span><span class="d">image height above aperture</span>
-    <span class="v">m</span><span class="d">magnification</span>
-    <span class="v">R</span><span class="d">radius of curvature at vertex</span>
+<div class="controls">
+  <div class="ctrl">
+    <label>f₁ (bottom): <span class="val" id="vf">80</span> mm</label>
+    <input type="range" id="sf" min="40" max="160" value="80">
+  </div>
+  <div class="ctrl">
+    <label>f₂ (top): <span class="val" id="vf2">80</span> mm</label>
+    <input type="range" id="sf2" min="40" max="160" value="80">
+  </div>
+  <div class="ctrl">
+    <label>d_sep: <span class="val" id="vd">80</span> mm</label>
+    <input type="range" id="sd" min="40" max="200" value="80">
+  </div>
+  <div class="ctrl">
+    <label>h_obj: <span class="val" id="vh">0</span> mm</label>
+    <input type="range" id="sh" min="0" max="75" value="0" step="1">
+  </div>
+  <div class="ctrl">
+    <label>Aperture: <span class="val" id="va">60</span> mm</label>
+    <input type="range" id="sa" min="10" max="150" value="60">
+  </div>
+  <div class="ctrl">
+    <label>Rays: <span class="val" id="vr">12</span></label>
+    <input type="range" id="sr" min="3" max="30" value="12">
   </div>
 </div>
 
-<div class="legend">
-  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent);"></div> Master equation</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:var(--accent3);"></div> Invariant (always true)</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:var(--red);"></div> Hard constraint</div>
-</div>
+<div id="validator"></div>
 
-<!-- MASTER -->
-<div class="section">
-  <div class="section-title">Master Equation</div>
-  <div class="formula-grid">
-    <div class="formula-card full master">
-      <div class="formula-label">The one rule that makes everything work</div>
-      <div class="formula"><span class="var">f₁</span> <span class="eq">=</span> <span class="var">f₂</span> <span class="eq">=</span> <span class="var">d_sep</span></div>
-    </div>
-  </div>
-</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const SCALE = 2;
+const CX = canvas.width / 2;
+const CY = canvas.height / 2;
 
-<!-- GEOMETRY -->
-<div class="section">
-  <div class="section-title">Mirror Geometry</div>
-  <div class="formula-grid">
-    <div class="formula-card">
-      <div class="formula-label">Focal length from diameter & depth</div>
-      <div class="formula"><span class="var">f</span> <span class="eq">=</span> D² / (16d)</div>
-    </div>
-    <div class="formula-card">
-      <div class="formula-label">Depth from focal length & diameter</div>
-      <div class="formula"><span class="var">d</span> <span class="eq">=</span> D² / (16f)</div>
-    </div>
-    <div class="formula-card">
-      <div class="formula-label">Diameter from focal length & depth</div>
-      <div class="formula"><span class="var">D</span> <span class="eq">=</span> 4√(f·d)</div>
-    </div>
-    <div class="formula-card">
-      <div class="formula-label">Radius of curvature at vertex</div>
-      <div class="formula"><span class="var">R</span> <span class="eq">=</span> 2f</div>
-    </div>
-  </div>
-</div>
+function toScreen(x, y) { return [CX + x * SCALE, CY - y * SCALE]; }
+function parabolaY(x, f, vy, s) { return s * (x * x) / (4 * f) + vy; }
 
-<!-- CANONICAL -->
-<div class="section">
-  <div class="section-title">Canonical Relationships (rims touching)</div>
-  <div class="formula-grid">
-    <div class="formula-card">
-      <div class="formula-label">Focal length from diameter</div>
-      <div class="formula"><span class="var">f</span> <span class="eq">=</span> D / (2√2)
-        <span class="note">≈ 0.3536 × D</span>
-      </div>
-    </div>
-    <div class="formula-card">
-      <div class="formula-label">Dish depth from diameter</div>
-      <div class="formula"><span class="var">d</span> <span class="eq">=</span> D / (4√2)
-        <span class="note">≈ 0.1768 × D</span>
-      </div>
-    </div>
-    <div class="formula-card">
-      <div class="formula-label">Vertex separation</div>
-      <div class="formula"><span class="var">d_sep</span> <span class="eq">=</span> f <span class="eq">=</span> 2d</div>
-    </div>
-    <div class="formula-card invariant">
-      <div class="formula-label">f-ratio (fixed for all sizes)</div>
-      <div class="formula"><span class="var">N</span> <span class="eq">=</span> f/D <span class="eq">=</span> 1/(2√2)
-        <span class="note">≈ 0.354</span>
-      </div>
-    </div>
-  </div>
-</div>
+function drawParabola(f, vy, s, halfW, color, isUpper, aperture) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  const steps = 200;
+  const apHalf = aperture / 2;
+  let drawing = false;
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const x = -halfW + (2 * halfW * i / steps);
+    if (isUpper && Math.abs(x) < apHalf) { drawing = false; continue; }
+    const y = parabolaY(x, f, vy, s);
+    const [sx, sy] = toScreen(x, y);
+    if (!drawing) { ctx.moveTo(sx, sy); drawing = true; }
+    else ctx.lineTo(sx, sy);
+  }
+  ctx.stroke();
+}
 
-<!-- IMAGE -->
-<div class="section">
-  <div class="section-title">Image Position & Magnification</div>
-  <div class="formula-grid">
-    <div class="formula-card">
-      <div class="formula-label">Image height (given object height)</div>
-      <div class="formula"><span class="var">h_img</span> <span class="eq">=</span> f·h_obj / (f − h_obj)</div>
-    </div>
-    <div class="formula-card">
-      <div class="formula-label">Object height (given desired image height)</div>
-      <div class="formula"><span class="var">h_obj</span> <span class="eq">=</span> f·h_img / (f + h_img)</div>
-    </div>
-    <div class="formula-card">
-      <div class="formula-label">Magnification</div>
-      <div class="formula"><span class="var">m</span> <span class="eq">=</span> f / (f − h_obj)</div>
-    </div>
-    <div class="formula-card">
-      <div class="formula-label">Lateral inversion</div>
-      <div class="formula"><span class="var">x_img</span> <span class="eq">=</span> −x_obj × m
-        <span class="note">left↔right swap, NOT upside down</span>
-      </div>
-    </div>
-  </div>
-</div>
+function normal(x, f, s) {
+  const nx = -x / (2 * f);
+  const ny = s;
+  const len = Math.sqrt(nx * nx + ny * ny);
+  return [nx / len, ny / len];
+}
 
-<!-- VIEWING -->
-<div class="section">
-  <div class="section-title">Viewing Cone (angles from horizontal)</div>
-  <div class="formula-grid">
-    <div class="formula-card">
-      <div class="formula-label">Minimum angle (inner limit)</div>
-      <div class="formula"><span class="var">θ_min</span> <span class="eq">=</span> arctan(A/2 / d_sep)
-        <span class="note">= arctan( (A/D)·√2 )</span>
-      </div>
-    </div>
-    <div class="formula-card invariant">
-      <div class="formula-label">Maximum angle (outer limit) — FIXED</div>
-      <div class="formula"><span class="var">θ_max</span> <span class="eq">=</span> arctan(√2)
-        <span class="note">= 54.74° always</span>
-      </div>
-    </div>
-    <div class="formula-card">
-      <div class="formula-label">Cone width</div>
-      <div class="formula"><span class="var">Δθ</span> <span class="eq">=</span> θ_max − θ_min</div>
-    </div>
-    <div class="formula-card">
-      <div class="formula-label">Optimal viewing</div>
-      <div class="formula"><span class="var">θ_opt</span> <span class="eq">=</span> (θ_min + θ_max) / 2</div>
-    </div>
-    <div class="formula-card">
-      <div class="formula-label">Peep risk ratio</div>
-      <div class="formula"><span class="var">A/D</span> <span class="eq">&lt;</span> 0.25
-        <span class="note">for low peep risk</span>
-      </div>
-    </div>
-    <div class="formula-card">
-      <div class="formula-label">Aperture/diameter ratio</div>
-      <div class="formula"><span class="var">A/D</span> <span class="eq">=</span> tan(θ_min) / tan(θ_max)</div>
-    </div>
-  </div>
-</div>
+function reflectVec(dx, dy, nx, ny) {
+  const dot = dx * nx + dy * ny;
+  return [dx - 2 * dot * nx, dy - 2 * dot * ny];
+}
 
-<!-- RAY INTERSECTION -->
-<div class="section">
-  <div class="section-title">Ray–Parabola Intersection</div>
-  <div class="formula-grid">
-    <div class="formula-card full">
-      <div class="formula-label">Ray from (ox, oy) with direction (dx, dy), parabola vertex (vx, vy), sign s = ±1</div>
-      <div class="formula">
-        u = ox − vx,&nbsp;&nbsp;v = oy − vy<br>
-        A = dx²<br>
-        B = 2u·dx − 4f·s·dy<br>
-        C = u² − 4f·s·v<br>
-        <span class="note">Solve At² + Bt + C = 0, take smallest positive t</span>
-        <span class="note">If dx = 0 (vertical ray): t = −C/B</span>
-      </div>
-    </div>
-  </div>
-</div>
+function rayParabola(ox, oy, dx, dy, f, vy, s) {
+  const u = ox;
+  const v = oy - vy;
+  const ff = 4 * f;
+  const A = s * dx * dx / ff;
+  const B = 2 * s * u * dx / ff - dy;
+  const C = s * u * u / ff - v;
 
-<!-- REFLECTION -->
-<div class="section">
-  <div class="section-title">Reflection</div>
-  <div class="formula-grid">
-    <div class="formula-card">
-      <div class="formula-label">Surface normal at (x, y) on parabola</div>
-      <div class="formula">
-        n_x = −(x − vx) / (2f)<br>
-        n_y = s<br>
-        <span class="note">then normalize: n̂ = n/|n|</span>
-      </div>
-    </div>
-    <div class="formula-card">
-      <div class="formula-label">Reflected ray direction</div>
-      <div class="formula"><span class="var">r</span> <span class="eq">=</span> d − 2(d·n̂)n̂
-        <span class="note">d = incident direction, n̂ = unit normal</span>
-      </div>
-    </div>
-  </div>
-</div>
+  if (Math.abs(A) < 1e-12) {
+    if (Math.abs(B) < 1e-12) return null;
+    const t = -C / B;
+    return t > 0.001 ? t : null;
+  }
+  const disc = B * B - 4 * A * C;
+  if (disc < 0) return null;
+  const sqrtD = Math.sqrt(disc);
+  const t1 = (-B - sqrtD) / (2 * A);
+  const t2 = (-B + sqrtD) / (2 * A);
+  let t = null;
+  if (t1 > 0.001) t = t1;
+  if (t2 > 0.001 && (t === null || t2 < t)) t = t2;
+  return t;
+}
 
-<!-- BRIGHTNESS -->
-<div class="section">
-  <div class="section-title">Brightness</div>
-  <div class="formula-grid">
-    <div class="formula-card full">
-      <div class="formula-label">Net image brightness</div>
-      <div class="formula"><span class="var">I_img</span> <span class="eq">=</span> I_obj × R₁ × R₂ × η
-        <span class="note">R₁,R₂ ≈ 0.90 (aluminum). η ≈ 0.5–0.6 (geometric efficiency)</span>
-      </div>
-    </div>
-  </div>
-</div>
+// Check where a ray from (ox,oy) direction (dx,dy) crosses a horizontal line at y=lineY
+// Returns x at crossing, or null if ray doesn't reach it
+function rayCrossesY(ox, oy, dx, dy, lineY) {
+  if (Math.abs(dy) < 1e-12) return null; // horizontal ray
+  const t = (lineY - oy) / dy;
+  if (t < 0.001) return null; // behind ray
+  return ox + t * dx;
+}
 
-<!-- SECONDARY IMAGES -->
-<div class="section">
-  <div class="section-title">Secondary Images (d_sep > f)</div>
-  <div class="formula-grid">
-    <div class="formula-card full">
-      <div class="formula-label">Mirror separations where secondary images appear</div>
-      <div class="formula">
-        4 reflections: &nbsp;<span class="var">d_sep/f</span> ≈ 1.39<br>
-        6 reflections: &nbsp;<span class="var">d_sep/f</span> ≈ 1.56<br>
-        8 reflections: &nbsp;<span class="var">d_sep/f</span> ≈ 1.66<br>
-        n → ∞: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="var">d_sep/f</span> → 2.0
-      </div>
-    </div>
-  </div>
-</div>
+function draw() {
+  const f = parseFloat(document.getElementById('sf').value);   // f1 — bottom mirror
+  const f2 = parseFloat(document.getElementById('sf2').value); // f2 — top mirror
+  const d_sep = parseFloat(document.getElementById('sd').value);
+  const h_obj = parseFloat(document.getElementById('sh').value);
+  const aperture = parseFloat(document.getElementById('sa').value);
+  const numRays = parseInt(document.getElementById('sr').value);
 
-<!-- CONSTRAINTS -->
-<div class="section">
-  <div class="section-title">Hard Constraints</div>
-  <div class="formula-grid">
-    <div class="formula-card constraint">
-      <div class="formula-label">Object must be below focal point</div>
-      <div class="formula">h_obj <span class="eq">&lt;</span> f</div>
-    </div>
-    <div class="formula-card constraint">
-      <div class="formula-label">Aperture smaller than diameter</div>
-      <div class="formula">A <span class="eq">&lt;</span> D</div>
-    </div>
-    <div class="formula-card constraint">
-      <div class="formula-label">Dishes must not intersect</div>
-      <div class="formula">d <span class="eq">&lt;</span> d_sep / 2</div>
-    </div>
-    <div class="formula-card constraint">
-      <div class="formula-label">Image must form (rays converge)</div>
-      <div class="formula">d_sep <span class="eq">&lt;</span> 2f</div>
-    </div>
-  </div>
-</div>
+  document.getElementById('vf').textContent = f;
+  document.getElementById('vf2').textContent = f2;
+  document.getElementById('vd').textContent = d_sep;
+  document.getElementById('vh').textContent = h_obj;
+  document.getElementById('va').textContent = aperture;
+  document.getElementById('vr').textContent = numRays;
 
-<!-- VERIFICATION -->
-<div class="section">
-  <div class="section-title">Verification — Mirage Model 2000</div>
-  <div class="formula-grid">
-    <div class="formula-card full">
-      <div class="formula-label">Plug these in to check any formula</div>
-      <div class="formula">
-        D = 228 mm &nbsp; f = 80.6 mm &nbsp; A = 62.5 mm &nbsp; d_sep = 80.6 mm<br>
-        d = 40.3 mm &nbsp; θ_min = 21.2° &nbsp; θ_max = 54.7° &nbsp; Δθ = 33.5°<br>
-        <span class="note">h_obj = 25.4mm → h_img = 37.1mm, m = 1.46</span>
-      </div>
-    </div>
-  </div>
-</div>
+  const vy1 = -d_sep / 2;
+  const vy2 = d_sep / 2;
+  // Rim: where M1 and M2 intersect
+  // M1: y = x²/(4f) + vy1,  M2: y = -x²/(4f2) + vy2
+  // x²/(4f) + vy1 = -x²/(4f2) + vy2
+  // x²(1/(4f) + 1/(4f2)) = d_sep
+  // x² = 4·f·f2·d_sep / (f + f2)
+  const rimSq = 4 * f * f2 * d_sep / (f + f2);
+  if (rimSq <= 0) return;
+  const halfW = Math.sqrt(rimSq);
+  const D = 2 * halfW;
+  const apHalf = aperture / 2;
 
+  const isCanonical = Math.abs(d_sep - f) < 0.5 && Math.abs(f - f2) < 0.5;
+  const objBeyondFocus = h_obj >= f;
+  const divergent = d_sep >= 2 * Math.min(f, f2); // conservative
+
+  // Formula predictions
+  let formula_h_img = null, formula_mag = null, formula_imgY = null;
+  if (isCanonical && !objBeyondFocus && h_obj > 0) {
+    formula_h_img = f * h_obj / (f - h_obj);
+    formula_mag = f / (f - h_obj);
+    formula_imgY = vy2 + formula_h_img;
+  } else if (isCanonical && h_obj === 0) {
+    formula_h_img = 0;
+    formula_mag = 1;
+    formula_imgY = vy2;
+  }
+
+  const formula_theta_min = Math.atan2(aperture / 2, d_sep) * 180 / Math.PI;
+  const formula_theta_max = Math.atan2(D / 2, d_sep) * 180 / Math.PI;
+  const formula_depth = D * D / (16 * f);
+  const formula_f_canonical = D / (2 * Math.sqrt(2));
+  const formula_d_check = d_sep / 2;
+
+  // ========== DRAW ==========
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const mirrorColor = (objBeyondFocus || divergent) ? '#444' : '#777';
+  drawParabola(f, vy1, +1, halfW, mirrorColor, false, 0);
+  drawParabola(f2, vy2, -1, halfW, mirrorColor, true, aperture);
+
+  // Aperture markers
+  const apEdgeY = parabolaY(apHalf, f2, vy2, -1);
+  const [ax1, ay1] = toScreen(-apHalf, apEdgeY);
+  const [ax2, ay2] = toScreen(apHalf, apEdgeY);
+  ctx.strokeStyle = '#c08030';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(ax1, ay1); ctx.lineTo(ax1, ay1 - 12);
+  ctx.moveTo(ax2, ay2); ctx.lineTo(ax2, ay2 - 12);
+  ctx.stroke();
+
+  // Object
+  const objX = 0;
+  const objY = vy1 + h_obj;
+  const [osx, osy] = toScreen(objX, objY);
+  ctx.fillStyle = '#f04040';
+  ctx.fillRect(osx - 4, osy - 4, 8, 8);
+  ctx.font = '10px monospace';
+  ctx.fillText('OBJ', osx + 8, osy + 3);
+
+  // Focal points
+  const [fx1s, fy1s] = toScreen(0, vy1 + f);   // M1 focus
+  const [fx2s, fy2s] = toScreen(0, vy2 - f2);  // M2 focus
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(fx1s - 4, fy1s); ctx.lineTo(fx1s + 4, fy1s);
+  ctx.moveTo(fx1s, fy1s - 4); ctx.lineTo(fx1s, fy1s + 4);
+  ctx.moveTo(fx2s - 4, fy2s); ctx.lineTo(fx2s + 4, fy2s);
+  ctx.moveTo(fx2s, fy2s - 4); ctx.lineTo(fx2s, fy2s + 4);
+  ctx.stroke();
+  ctx.fillStyle = '#555';
+  ctx.font = '9px monospace';
+  ctx.fillText('f₁', fx1s + 6, fy1s + 3);
+  ctx.fillText('f₂', fx2s + 6, fy2s + 3);
+
+  // Axis
+  ctx.strokeStyle = '#222';
+  ctx.lineWidth = 0.5;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(CX, 0); ctx.lineTo(CX, canvas.height); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ========== RAY TRACE ==========
+  const convergencePoints = [];
+  const postM2angles = [];
+  const exitAngles = []; // angle from horizontal of each exiting ray
+  let raysAttempted = 0;
+  let raysCompleted = 0;  // hit M2, hit M1, exited aperture
+  let raysTrapped = 0;     // completed reflections but blocked by M2/aperture
+
+  for (let i = 0; i < numRays; i++) {
+    const frac = (i + 0.5) / numRays;
+    const angle = -70 + 140 * frac;
+    const theta = angle * Math.PI / 180;
+    const dx = Math.sin(theta);
+    const dy = Math.cos(theta);
+    raysAttempted++;
+
+    // Step 1: Object -> M2
+    const t2 = rayParabola(objX, objY, dx, dy, f2, vy2, -1);
+    if (t2 === null) continue;
+    const hitX2 = objX + t2 * dx;
+    const hitY2 = objY + t2 * dy;
+
+    // Check bounds: must hit within mirror rim
+    if (Math.abs(hitX2) > halfW) continue;
+
+    // Check: does ray go through aperture instead of hitting mirror?
+    if (Math.abs(hitX2) < apHalf) {
+      // Ray escapes through aperture without hitting M2 — lost upward
+      // Draw as dim dead ray
+      const [sx1, sy1] = toScreen(objX, objY);
+      const escapeY = vy2 + 30; // just above aperture
+      const [sx2, sy2] = toScreen(hitX2, escapeY);
+      ctx.strokeStyle = 'rgba(100,100,100,0.2)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(sx1, sy1); ctx.lineTo(sx2, sy2); ctx.stroke();
+      continue;
+    }
+
+    // Draw: Object -> M2 (yellow)
+    const [s1x, s1y] = toScreen(objX, objY);
+    const [s2x, s2y] = toScreen(hitX2, hitY2);
+    ctx.strokeStyle = 'rgba(255,255,0,0.45)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(s1x, s1y); ctx.lineTo(s2x, s2y); ctx.stroke();
+
+    // Step 2: Reflect off M2
+    const [n2x, n2y] = normal(hitX2, f2, -1);
+    const [rx2, ry2] = reflectVec(dx, dy, n2x, n2y);
+
+    const postAngle = Math.atan2(Math.abs(rx2), Math.abs(ry2)) * 180 / Math.PI;
+    postM2angles.push(postAngle);
+
+    // Step 3: M2 -> M1
+    const t1 = rayParabola(hitX2, hitY2, rx2, ry2, f, vy1, +1);
+    if (t1 === null) continue;
+    const hitX1 = hitX2 + t1 * rx2;
+    const hitY1 = hitY2 + t1 * ry2;
+
+    // Check: hit must be within M1 rim
+    if (Math.abs(hitX1) > halfW) continue;
+
+    // Check: hit point must be on the concave (upper) surface of M1
+    // i.e. hitY1 should be >= vy1 (above vertex)
+    const expectedY1 = parabolaY(hitX1, f, vy1, +1);
+    if (Math.abs(hitY1 - expectedY1) > 0.5) continue; // didn't actually land on M1
+
+    // Draw: M2 -> M1
+    const [s3x, s3y] = toScreen(hitX1, hitY1);
+    ctx.strokeStyle = 'rgba(255,255,0,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(s2x, s2y); ctx.lineTo(s3x, s3y); ctx.stroke();
+
+    // Step 4: Reflect off M1
+    const [n1x, n1y] = normal(hitX1, f, +1);
+    const [rx1, ry1] = reflectVec(rx2, ry2, n1x, n1y);
+
+    // Step 5: Does the outgoing ray exit through the aperture?
+    // The ray starts at (hitX1, hitY1) going direction (rx1, ry1).
+    // It must cross the aperture plane (y ≈ vy2) with |x| < apHalf.
+    // BUT it must also not hit M2 first (if it's heading toward a mirror region).
+
+    // First check: does it hit M2 mirror surface before exiting?
+    const t2again = rayParabola(hitX1, hitY1, rx1, ry1, f2, vy2, -1);
+    let hitsM2again = false;
+    if (t2again !== null) {
+      const rehitX = hitX1 + t2again * rx1;
+      // If this hit point is outside the aperture, the ray hits mirror, not aperture
+      if (Math.abs(rehitX) >= apHalf && Math.abs(rehitX) <= halfW) {
+        hitsM2again = true;
+      }
+    }
+
+    // Find where ray crosses aperture plane (y = apEdgeY approximately, use vy2 for simplicity)
+    const crossX = rayCrossesY(hitX1, hitY1, rx1, ry1, vy2);
+    const exitsAperture = crossX !== null && Math.abs(crossX) < apHalf && !hitsM2again;
+
+    if (exitsAperture) {
+      // Ray exits! Draw outgoing ray from M1 to a point above aperture, then extending out
+      raysCompleted++;
+
+      // Record exit angle from horizontal
+      // rx1, ry1 is the outgoing direction. Angle from horizontal = atan2(ry1, |rx1|)
+      // But we want the angle a viewer would be at — measured from horizontal at the aperture
+      // The ray exits at (crossX, vy2) going direction (rx1, ry1)
+      // A viewer looking back along this ray is at angle atan2(ry1, -rx1) from horizontal if rx1<0,
+      // or atan2(ry1, rx1) if rx1>0. We want absolute angle from horizontal.
+      const exitAngleDeg = Math.atan2(Math.abs(ry1), Math.abs(rx1)) * 180 / Math.PI;
+      exitAngles.push(exitAngleDeg);
+
+      // Draw from M1 hit to where it crosses aperture plane
+      const [s4x, s4y] = toScreen(hitX1, hitY1);
+      const [s5x, s5y] = toScreen(crossX, vy2);
+      ctx.strokeStyle = 'rgba(255,255,0,0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(s4x, s4y); ctx.lineTo(s5x, s5y); ctx.stroke();
+
+      // Continue ray above aperture (visible to viewer)
+      const ext = 150;
+      const exitEndX = crossX + ext * rx1;
+      const exitEndY = vy2 + ext * ry1;
+      const [s6x, s6y] = toScreen(crossX, vy2);
+      const [s7x, s7y] = toScreen(exitEndX, exitEndY);
+      ctx.strokeStyle = 'rgba(255,200,0,0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(s6x, s6y); ctx.lineTo(s7x, s7y); ctx.stroke();
+
+      // Convergence: where does outgoing ray cross x=0 ABOVE aperture?
+      if (Math.abs(rx1) > 1e-6) {
+        const tAxis = -hitX1 / rx1;
+        if (tAxis > 0) {
+          const convergY = hitY1 + tAxis * ry1;
+          // Only count convergence above or near the aperture
+          if (convergY >= vy2 - 5) {
+            convergencePoints.push(convergY);
+            const [cx, cy] = toScreen(0, convergY);
+            ctx.fillStyle = 'rgba(0,255,100,0.6)';
+            ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+      }
+    } else {
+      // Ray is TRAPPED — hits M2 back or misses aperture
+      raysTrapped++;
+
+      // Draw the trapped segment dimly from M1 to wherever it ends up
+      const [s4x, s4y] = toScreen(hitX1, hitY1);
+      if (hitsM2again && t2again !== null) {
+        const rehitX = hitX1 + t2again * rx1;
+        const rehitY = hitY1 + t2again * ry1;
+        const [s5x, s5y] = toScreen(rehitX, rehitY);
+        ctx.strokeStyle = 'rgba(255,50,50,0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(s4x, s4y); ctx.lineTo(s5x, s5y); ctx.stroke();
+        // Small red dot where it hits M2 back
+        ctx.fillStyle = 'rgba(255,50,50,0.4)';
+        ctx.beginPath(); ctx.arc(s5x, s5y, 2, 0, Math.PI * 2); ctx.fill();
+      } else if (crossX !== null) {
+        // Crosses aperture plane but outside aperture
+        const [s5x, s5y] = toScreen(crossX, vy2);
+        ctx.strokeStyle = 'rgba(255,50,50,0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(s4x, s4y); ctx.lineTo(s5x, s5y); ctx.stroke();
+      }
+    }
+  }
+
+  // ========== IMAGE MARKERS ==========
+  let ray_imgY = null, ray_spread = 0;
+  if (convergencePoints.length > 1) {
+    const minC = Math.min(...convergencePoints);
+    const maxC = Math.max(...convergencePoints);
+    ray_spread = maxC - minC;
+    ray_imgY = convergencePoints.reduce((a, b) => a + b, 0) / convergencePoints.length;
+  } else if (convergencePoints.length === 1) {
+    ray_imgY = convergencePoints[0];
+  }
+
+  // Ray-traced image marker (green/yellow/red based on spread)
+  if (ray_imgY !== null && !objBeyondFocus && !divergent) {
+    const [ix, iy] = toScreen(0, ray_imgY);
+    if (iy > 5 && iy < canvas.height - 5) {
+      const r = Math.max(6, Math.min(40, ray_spread * SCALE));
+      ctx.strokeStyle = ray_spread < 1 ? '#0f0' : ray_spread < 5 ? '#ff0' : '#f00';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(ix, iy, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#0f0';
+      ctx.font = '9px monospace';
+      ctx.fillText('RAY', ix + r + 4, iy - 2);
+    }
+  }
+
+  // Formula prediction marker (blue dashed)
+  if (formula_imgY !== null) {
+    const [fix, fiy] = toScreen(0, formula_imgY);
+    if (fiy > 5 && fiy < canvas.height - 5) {
+      ctx.strokeStyle = 'rgba(100,150,255,0.6)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.arc(fix, fiy, 12, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(100,150,255,0.7)';
+      ctx.font = '9px monospace';
+      ctx.fillText('FORMULA', fix + 16, fiy + 3);
+    }
+  }
+
+  // ========== VIEWING CONE ==========
+  // Draw cone lines from the image point (or aperture center) showing min/max viewing angles
+  // These are the angles from horizontal that a viewer's eye must be within
+  const coneOriginY = ray_imgY !== null ? ray_imgY : vy2;
+  const [coX, coY] = toScreen(0, coneOriginY);
+  
+  if (exitAngles.length >= 2 && coY > 5 && coY < canvas.height - 5) {
+    const ray_theta_min = Math.min(...exitAngles);
+    const ray_theta_max = Math.max(...exitAngles);
+    const coneLen = 120; // px length of cone lines
+
+    // Draw cone edges — these show where the shallowest and steepest viewer can be
+    // θ is from horizontal, so line goes: dx = cos(θ), dy = sin(θ) upward-right
+    // Draw both sides (left and right of aperture)
+    for (const side of [-1, 1]) {
+      // Min angle line (shallowest viewer)
+      const minRad = ray_theta_min * Math.PI / 180;
+      const minEndX = coX + side * coneLen * Math.cos(minRad);
+      const minEndY = coY - coneLen * Math.sin(minRad);
+      ctx.strokeStyle = 'rgba(0,200,255,0.3)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(coX, coY); ctx.lineTo(minEndX, minEndY); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Max angle line (steepest viewer)
+      const maxRad = ray_theta_max * Math.PI / 180;
+      const maxEndX = coX + side * coneLen * Math.cos(maxRad);
+      const maxEndY = coY - coneLen * Math.sin(maxRad);
+      ctx.strokeStyle = 'rgba(0,200,255,0.3)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(coX, coY); ctx.lineTo(maxEndX, maxEndY); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Fill the cone region lightly
+      ctx.fillStyle = 'rgba(0,200,255,0.04)';
+      ctx.beginPath();
+      ctx.moveTo(coX, coY);
+      ctx.lineTo(minEndX, minEndY);
+      ctx.lineTo(maxEndX, maxEndY);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Label angles on the right side
+    const labelR = coneLen + 5;
+    const minLabelX = coX + labelR * Math.cos(ray_theta_min * Math.PI / 180);
+    const minLabelY = coY - labelR * Math.sin(ray_theta_min * Math.PI / 180);
+    const maxLabelX = coX + labelR * Math.cos(ray_theta_max * Math.PI / 180);
+    const maxLabelY = coY - labelR * Math.sin(ray_theta_max * Math.PI / 180);
+
+    ctx.fillStyle = 'rgba(0,200,255,0.7)';
+    ctx.font = '10px monospace';
+    ctx.fillText(`${ray_theta_min.toFixed(1)}°`, minLabelX, minLabelY + 3);
+    ctx.fillText(`${ray_theta_max.toFixed(1)}°`, maxLabelX, maxLabelY + 3);
+
+    // Cone width label — centered between the two lines
+    const midAngle = (ray_theta_min + ray_theta_max) / 2;
+    const midRad = midAngle * Math.PI / 180;
+    const midR = coneLen * 0.6;
+    const midX = coX + midR * Math.cos(midRad);
+    const midY = coY - midR * Math.sin(midRad);
+    const coneWidth = ray_theta_max - ray_theta_min;
+    ctx.fillStyle = 'rgba(0,255,200,0.9)';
+    ctx.font = 'bold 12px monospace';
+    ctx.fillText(`${coneWidth.toFixed(1)}°`, midX - 10, midY + 4);
+  }
+
+  // Warnings
+  if (objBeyondFocus) {
+    ctx.fillStyle = 'rgba(240,60,60,0.9)';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText('NO IMAGE — h_obj ≥ f', CX - 100, 25);
+  }
+  if (divergent) {
+    ctx.fillStyle = 'rgba(240,60,60,0.9)';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText('NO IMAGE — d_sep ≥ 2f', CX - 110, 25);
+  }
+
+  // Ray stats on canvas
+  ctx.fillStyle = '#666';
+  ctx.font = '10px monospace';
+  ctx.fillText(`rays: ${raysCompleted} exit / ${raysTrapped} trapped / ${raysAttempted} total`, 10, canvas.height - 10);
+
+  // ========== VALIDATOR ==========
+  // ALL checks run ALWAYS. No skipping. No hiding.
+  const checks = [];
+  let maxPostM2angle = postM2angles.length > 0 ? Math.max(...postM2angles) : 0;
+
+  // --- HARD CONSTRAINTS (if any fail, no image is possible) ---
+
+  checks.push({
+    label: 'h_obj < f₁',
+    expected: `< ${f}`,
+    got: `${h_obj}`,
+    unit: 'mm',
+    ok: !objBeyondFocus,
+    fatal: objBeyondFocus
+  });
+
+  checks.push({
+    label: 'd_sep < 2·min(f₁,f₂)',
+    expected: `< ${(2 * Math.min(f, f2))}`,
+    got: `${d_sep}`,
+    unit: 'mm',
+    ok: !divergent,
+    fatal: divergent
+  });
+
+  // --- CANONICAL CHECK (is this even a standard mirascope?) ---
+
+  const dSepOverF = d_sep / f;
+  const f1_equals_f2 = Math.abs(f - f2) < 0.5;
+  checks.push({
+    label: 'f₁ = f₂ (symmetric?)',
+    expected: f.toFixed(0),
+    got: f2.toFixed(0),
+    unit: 'mm',
+    ok: f1_equals_f2,
+    warn: Math.abs(f - f2) < 20
+  });
+
+  checks.push({
+    label: 'd_sep = f₁ (canonical?)',
+    expected: '1.000',
+    got: dSepOverF.toFixed(3),
+    unit: '',
+    ok: Math.abs(dSepOverF - 1) < 0.01,
+    warn: Math.abs(dSepOverF - 1) < 0.15
+  });
+
+  // --- GEOMETRY CROSS-CHECKS (always run) ---
+
+  const depthErr = Math.abs(formula_depth - formula_d_check);
+  checks.push({
+    label: 'd = d_sep/2',
+    expected: formula_d_check.toFixed(2),
+    got: formula_depth.toFixed(2),
+    unit: 'mm',
+    ok: depthErr < 0.5,
+    warn: depthErr < 2
+  });
+
+  const fErr = Math.abs(f - formula_f_canonical);
+  checks.push({
+    label: 'f = D/(2√2)',
+    expected: formula_f_canonical.toFixed(1),
+    got: f.toFixed(1),
+    unit: 'mm',
+    ok: fErr < 2,
+    warn: fErr < 10
+  });
+
+  const exp_tmax = Math.atan(Math.sqrt(2)) * 180 / Math.PI;
+  const tErr = Math.abs(formula_theta_max - exp_tmax);
+  checks.push({
+    label: 'θ_max = 54.74°',
+    expected: exp_tmax.toFixed(2),
+    got: formula_theta_max.toFixed(2),
+    unit: '°',
+    ok: tErr < 0.5,
+    warn: tErr < 3
+  });
+
+  // --- RAY BEHAVIOR (the truth from the trace) ---
+
+  // Post-M2 verticality — always report the actual angle
+  const expectedVert = (isCanonical && h_obj === 0) ? '~0' : '>0';
+  const vertOk = (isCanonical && h_obj === 0) ? maxPostM2angle < 0.01 : maxPostM2angle > 0;
+  checks.push({
+    label: 'Post-M2 angle from vertical',
+    expected: expectedVert,
+    got: maxPostM2angle.toFixed(2),
+    unit: '°',
+    ok: vertOk
+  });
+
+  // Aperture exit rate — THIS is the key reality check
+  const exitPct = raysAttempted > 0 ? (raysCompleted / raysAttempted * 100) : 0;
+  checks.push({
+    label: 'Rays exiting aperture',
+    expected: '>50%',
+    got: `${raysCompleted}/${raysAttempted} (${exitPct.toFixed(0)}%)`,
+    unit: '',
+    ok: exitPct > 50,
+    warn: exitPct > 20
+  });
+
+  // Trapped rays
+  checks.push({
+    label: 'Trapped rays',
+    expected: '0',
+    got: String(raysTrapped),
+    unit: '',
+    ok: raysTrapped === 0,
+    warn: raysTrapped <= 1
+  });
+
+  // --- VIEWING ANGLES (ray-traced vs formula) ---
+
+  const ray_theta_min = exitAngles.length >= 2 ? Math.min(...exitAngles) : null;
+  const ray_theta_max = exitAngles.length >= 2 ? Math.max(...exitAngles) : null;
+  const ray_cone_width = (ray_theta_min !== null && ray_theta_max !== null) ? ray_theta_max - ray_theta_min : null;
+
+  if (ray_theta_min !== null) {
+    const fMinErr = Math.abs(ray_theta_min - formula_theta_min);
+    checks.push({
+      label: 'θ_min (ray vs formula)',
+      expected: formula_theta_min.toFixed(1),
+      got: ray_theta_min.toFixed(1),
+      unit: '°',
+      ok: fMinErr < 5,
+      warn: fMinErr < 15
+    });
+  } else {
+    checks.push({
+      label: 'θ_min viewing angle',
+      expected: formula_theta_min.toFixed(1),
+      got: 'NO RAYS EXIT',
+      unit: '°',
+      ok: false
+    });
+  }
+
+  if (ray_theta_max !== null) {
+    const fMaxErr = Math.abs(ray_theta_max - formula_theta_max);
+    checks.push({
+      label: 'θ_max (ray vs formula)',
+      expected: formula_theta_max.toFixed(1),
+      got: ray_theta_max.toFixed(1),
+      unit: '°',
+      ok: fMaxErr < 5,
+      warn: fMaxErr < 15
+    });
+  } else {
+    checks.push({
+      label: 'θ_max viewing angle',
+      expected: formula_theta_max.toFixed(1),
+      got: 'NO RAYS EXIT',
+      unit: '°',
+      ok: false
+    });
+  }
+
+  if (ray_cone_width !== null) {
+    checks.push({
+      label: 'Viewing cone width',
+      expected: (formula_theta_max - formula_theta_min).toFixed(1),
+      got: ray_cone_width.toFixed(1),
+      unit: '°',
+      ok: Math.abs(ray_cone_width - (formula_theta_max - formula_theta_min)) < 10,
+      warn: ray_cone_width > 5
+    });
+  }
+
+  // Convergence spread — the real aberration measure
+  checks.push({
+    label: 'Convergence spread',
+    expected: '< 1',
+    got: convergencePoints.length > 1 ? ray_spread.toFixed(2) : (convergencePoints.length === 1 ? '0 (1 ray)' : 'N/A'),
+    unit: 'mm',
+    ok: convergencePoints.length >= 2 && ray_spread < 1,
+    warn: convergencePoints.length >= 2 && ray_spread < 5
+  });
+
+  // Image position: rays vs formula
+  if (formula_imgY !== null && ray_imgY !== null) {
+    const posErr = Math.abs(ray_imgY - formula_imgY);
+    checks.push({
+      label: 'Image Y: rays vs formula',
+      expected: formula_imgY.toFixed(2),
+      got: ray_imgY.toFixed(2),
+      unit: 'mm',
+      ok: posErr < 1,
+      warn: posErr < 5
+    });
+  } else if (formula_imgY !== null && ray_imgY === null) {
+    checks.push({
+      label: 'Image Y: rays vs formula',
+      expected: formula_imgY.toFixed(2),
+      got: 'NO RAYS CONVERGE',
+      unit: '',
+      ok: false
+    });
+  } else {
+    checks.push({
+      label: 'Image Y: rays vs formula',
+      expected: 'N/A (non-canonical)',
+      got: ray_imgY !== null ? ray_imgY.toFixed(2) + 'mm' : 'NO IMAGE',
+      unit: '',
+      ok: false,
+      warn: ray_imgY !== null
+    });
+  }
+
+  // h_img sanity — does the image height make physical sense?
+  if (h_obj > 0 && h_obj < f) {
+    const h_img = f * h_obj / (f - h_obj);
+    const sane = h_img < d_sep && h_img > 0;
+    checks.push({
+      label: 'h_img physically sane',
+      expected: `< ${d_sep.toFixed(0)}mm, > 0`,
+      got: h_img.toFixed(1),
+      unit: 'mm',
+      ok: sane,
+      warn: h_img < 2 * d_sep
+    });
+  } else if (h_obj === 0) {
+    checks.push({
+      label: 'h_img physically sane',
+      expected: '0 (at aperture)',
+      got: '0',
+      unit: 'mm',
+      ok: true
+    });
+  } else {
+    checks.push({
+      label: 'h_img physically sane',
+      expected: 'N/A',
+      got: 'h_obj ≥ f, no image',
+      unit: '',
+      ok: false
+    });
+  }
+
+  // Magnification
+  if (h_obj < f) {
+    const mag = f / (f - h_obj);
+    const magSane = mag > 0 && mag < 5;
+    checks.push({
+      label: 'Magnification',
+      expected: '1-3×',
+      got: mag.toFixed(3) + '×',
+      unit: '',
+      ok: magSane,
+      warn: mag < 10
+    });
+  } else {
+    checks.push({
+      label: 'Magnification',
+      expected: 'finite',
+      got: '∞ (h_obj ≥ f)',
+      unit: '',
+      ok: false
+    });
+  }
+
+  // Aperture vs diameter ratio
+  const adRatio = aperture / D;
+  checks.push({
+    label: 'A/D peep risk',
+    expected: '< 0.25',
+    got: adRatio.toFixed(3),
+    unit: '',
+    ok: adRatio < 0.25,
+    warn: adRatio < 0.5
+  });
+
+  // Aperture too big — bigger than mirror?
+  checks.push({
+    label: 'Aperture < diameter',
+    expected: `< ${D.toFixed(0)}`,
+    got: `${aperture}`,
+    unit: 'mm',
+    ok: aperture < D,
+    fatal: aperture >= D
+  });
+
+  // --- IMAGE LOCATION (is the image where a viewer can see it?) ---
+
+  // Where is the image relative to the aperture?
+  const imageAboveAperture = ray_imgY !== null && ray_imgY >= vy2 - 1;
+  const imageInsideCavity = ray_imgY !== null && ray_imgY < vy2 - 1;
+  const imageWayAbove = ray_imgY !== null && (ray_imgY - vy2) > d_sep;
+  const imageNearAperture = ray_imgY !== null && Math.abs(ray_imgY - vy2) < d_sep;
+
+  if (ray_imgY !== null) {
+    const imgRelative = ray_imgY - vy2;
+    let locStatus, locOk, locWarn;
+    if (imageInsideCavity) {
+      locStatus = `${imgRelative.toFixed(1)}mm (INSIDE CAVITY)`;
+      locOk = false;
+      locWarn = false;
+    } else if (imageWayAbove) {
+      locStatus = `${imgRelative.toFixed(1)}mm (TOO HIGH)`;
+      locOk = false;
+      locWarn = true;
+    } else {
+      locStatus = `${imgRelative.toFixed(1)}mm above aperture`;
+      locOk = true;
+      locWarn = false;
+    }
+    checks.push({
+      label: 'Image location vs aperture',
+      expected: '0 to ' + d_sep.toFixed(0) + 'mm above',
+      got: locStatus,
+      unit: '',
+      ok: locOk,
+      warn: locWarn
+    });
+  } else {
+    checks.push({
+      label: 'Image location vs aperture',
+      expected: 'at or above aperture',
+      got: 'NO IMAGE FOUND',
+      unit: '',
+      ok: false
+    });
+  }
+
+  // ========== OVERALL VERDICT ==========
+  // Answers: does a VISIBLE, SHARP image appear where a VIEWER can see it?
+  //
+  // 4 requirements:
+  // 1. No fatal constraint violations
+  // 2. Rays converge tightly (spread < threshold)
+  // 3. Image is above the aperture plane (not trapped in cavity)
+  // 4. Enough rays exit through the aperture
+  // 5. Image is close enough to aperture to be visible (not 500mm above)
+
+  const hasFatal = checks.some(c => c.fatal);
+  const raysConverge = convergencePoints.length >= 2 && ray_spread < 5;
+  const raysConvergeTight = convergencePoints.length >= 2 && ray_spread < 1;
+  const enoughRaysExit = exitPct > 20;
+  const enoughRaysExitGood = exitPct > 40;
+
+  const imageVisible = imageAboveAperture && imageNearAperture;
+  const imageTrapped = imageInsideCavity;
+
+  const imageFormed = !hasFatal && raysConverge && enoughRaysExit && imageVisible;
+  const imageGood = imageFormed && raysConvergeTight && enoughRaysExitGood;
+  const imagePerfect = imageGood && isCanonical && ray_spread < 0.1;
+
+  // Render
+  let html = '';
+
+  // Big verdict first — specific reason for failure
+  if (hasFatal) {
+    html += `<div style="padding:8px;background:#300;border:2px solid #f00;margin-bottom:8px;text-align:center;font-size:14px;font-weight:bold;color:#f44;">NO REAL IMAGE — PHYSICS VIOLATED</div>`;
+  } else if (imageTrapped && raysConverge) {
+    html += `<div style="padding:8px;background:#300;border:2px solid #f00;margin-bottom:8px;text-align:center;font-size:14px;font-weight:bold;color:#f44;">IMAGE TRAPPED INSIDE CAVITY — not visible</div>`;
+  } else if (imageWayAbove && raysConverge) {
+    html += `<div style="padding:8px;background:#330;border:2px solid #f80;margin-bottom:8px;text-align:center;font-size:14px;font-weight:bold;color:#fa0;">IMAGE TOO FAR ABOVE APERTURE — ${ray_imgY !== null ? (ray_imgY - vy2).toFixed(0) : '?'}mm up</div>`;
+  } else if (!raysConverge && raysCompleted > 0) {
+    html += `<div style="padding:8px;background:#330;border:2px solid #f80;margin-bottom:8px;text-align:center;font-size:14px;font-weight:bold;color:#fa0;">RAYS DIVERGE — no convergence (spread: ${ray_spread.toFixed(1)}mm)</div>`;
+  } else if (!enoughRaysExit) {
+    html += `<div style="padding:8px;background:#330;border:2px solid #f80;margin-bottom:8px;text-align:center;font-size:14px;font-weight:bold;color:#fa0;">MOST RAYS TRAPPED — only ${exitPct.toFixed(0)}% exit aperture</div>`;
+  } else if (!imageFormed) {
+    html += `<div style="padding:8px;background:#330;border:2px solid #f80;margin-bottom:8px;text-align:center;font-size:14px;font-weight:bold;color:#fa0;">NO USABLE IMAGE</div>`;
+  } else if (imageGood) {
+    html += `<div style="padding:8px;background:#030;border:2px solid #0f0;margin-bottom:8px;text-align:center;font-size:14px;font-weight:bold;color:#0f0;">${imagePerfect ? 'PERFECT' : 'GOOD'} REAL IMAGE FORMS</div>`;
+  } else {
+    html += `<div style="padding:8px;background:#332;border:2px solid #ff0;margin-bottom:8px;text-align:center;font-size:14px;font-weight:bold;color:#ff0;">DEGRADED IMAGE — visible but soft (spread: ${ray_spread.toFixed(1)}mm)</div>`;
+  }
+
+  // Detail rows
+  let passCount = 0, failCount = 0, warnCount = 0;
+  for (const c of checks) {
+    const isWarn = !c.ok && c.warn;
+    const isFatal = c.fatal;
+    const icon = c.ok ? '<span class="pass">✓</span>' : (isFatal ? '<span class="fail">✗✗</span>' : (isWarn ? '<span class="warn">⚠</span>' : '<span class="fail">✗</span>'));
+    const cls = c.ok ? 'pass' : (isFatal ? 'fail' : (isWarn ? 'warn' : 'fail'));
+    if (c.ok) passCount++; else if (isWarn) warnCount++; else failCount++;
+    html += `<div class="check-row">
+      <span class="check-label">${icon} ${c.label}</span>
+      <span class="dim">exp: ${c.expected}${c.unit}</span>
+      <span class="${cls} check-val">${c.got}${c.unit}</span>
+    </div>`;
+  }
+
+  html += `<div style="margin-top:6px;font-size:10px;color:#666;">${passCount} pass · ${warnCount} warn · ${failCount} fail</div>`;
+
+  document.getElementById('validator').innerHTML = html;
+}
+
+document.querySelectorAll('input[type=range]').forEach(el => el.addEventListener('input', draw));
+draw();
+</script>
 </body>
 </html>
