@@ -260,6 +260,57 @@ canvas {
   <p>The tools needed to search for a shape like this, such as evolutionary algorithms that can explore millions of freeform surface geometries, exact ray-tracing engines that can evaluate each one, and multi-objective scoring that balances image quality with viewing angle and brightness, did not exist when the mirascope was first discovered. They were also not available for practical use when it was last studied in 2007. However, these tools are available now. This project plans to use them, starting with the two basic laws of reflection and making no assumptions about the mirror shape, to explore a question that has never been asked before: is the parabola really the best shape for a mirascope, or was it just the shape that was readily available?</p>
 </div>
 
+<div style="max-width:50rem;width:100%;margin:2px 0;font-family:'SF Mono','Fira Code',Consolas,monospace;font-size:0.75rem;line-height:1;background:transparent;">
+
+  <!-- MATH HEADER -->
+  <div style="background:#0d0d0d;border-left:4px solid #a83232;padding:0.75rem 1rem;margin-bottom:1px;">
+    <span style="color:#d44;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Simulator Math</span>
+    <span style="color:#444;margin-left:1rem;">three functions · all geometry derives from these</span>
+  </div>
+
+  <!-- FORMULA 1 -->
+  <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:1.5rem 1fr;gap:0.4rem 0.75rem;align-items:start;">
+    <span style="color:#d44;font-weight:700;">①</span>
+    <span style="color:#999;font-weight:700;">Surface Normal of a Parabola</span>
+    <span></span>
+    <span style="color:#666;">Mirror surface: <span style="color:#ccc;">y = x² / (4f)</span></span>
+    <span></span>
+    <span style="color:#666;">Slope at x: <span style="color:#ccc;">dy/dx = x / (2f)</span></span>
+    <span></span>
+    <span style="color:#666;">Normal vector: <span style="color:#ccc;">n = ( −x/2f , 1 )</span> normalized to unit length</span>
+    <span></span>
+    <span style="color:#555;font-style:italic;">Top mirror (M2) flips y-component sign to −1</span>
+  </div>
+
+  <!-- FORMULA 2 -->
+  <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:1.5rem 1fr;gap:0.4rem 0.75rem;align-items:start;">
+    <span style="color:#d44;font-weight:700;">②</span>
+    <span style="color:#999;font-weight:700;">Reflection Formula</span>
+    <span></span>
+    <span style="color:#ccc;">r = d − 2(d·n)n</span>
+    <span></span>
+    <span style="color:#666;">d = incoming ray direction &nbsp;·&nbsp; n = surface normal &nbsp;·&nbsp; r = reflected ray direction</span>
+    <span></span>
+    <span style="color:#555;font-style:italic;">Standard specular reflection. Confirmed: Wikipedia / optics literature.</span>
+  </div>
+
+  <!-- FORMULA 3 -->
+  <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:1.5rem 1fr;gap:0.4rem 0.75rem;align-items:start;">
+    <span style="color:#d44;font-weight:700;">③</span>
+    <span style="color:#999;font-weight:700;">Ray–Parabola Intersection</span>
+    <span></span>
+    <span style="color:#666;">Ray: <span style="color:#ccc;">x(t) = ox + t·dx &nbsp;&nbsp; y(t) = oy + t·dy</span></span>
+    <span></span>
+    <span style="color:#666;">Substitute into parabola equation → quadratic in t → two solutions</span>
+    <span></span>
+    <span style="color:#666;">Selection: <span style="color:#ccc;">smallest positive t</span> (nearest intersection)</span>
+    <span></span>
+    <span style="color:#f0a040;font-style:italic;">⚠ Open question: is smallest t always the correct root for a concave mirror? Needs expert review.</span>
+  </div>
+
+</div>
+
+
 <canvas id="c" width="800" height="600"></canvas>
 
 <div class="controls">
@@ -1491,7 +1542,7 @@ Ratios scale to any device size.</span>`;
 
   <!-- RUN 1 -->
   <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
-    <span style="color:#555;">2026-05-04 #1</span>
+    <span style="color:#555;">2026-05-06 #1</span>
     <span style="color:#888;font-weight:700;">BASELINE — single point, h=0, 20 rays, ap/D fixed 0.15</span>
     <span></span>
     <span style="color:#666;">f₁/d=1.000 · f₂/d=1.000 · ap/D=0.150 → cone 44°</span>
@@ -1501,7 +1552,7 @@ Ratios scale to any device size.</span>`;
 
   <!-- RUN 2 -->
   <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
-    <span style="color:#555;">2026-05-04 #2</span>
+    <span style="color:#555;">2026-05-06 #2</span>
     <span style="color:#888;font-weight:700;">FIRST ASYMMETRIC FIND — convergence bug present</span>
     <span></span>
     <span style="color:#666;">f₁/d=0.820 · f₂/d=1.120 · d=100mm → cone 53°  ⚠ image not confirmed above aperture</span>
@@ -1511,7 +1562,7 @@ Ratios scale to any device size.</span>`;
 
   <!-- RUN 3 -->
   <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
-    <span style="color:#555;">2026-05-04 #3</span>
+    <span style="color:#555;">2026-05-06 #3</span>
     <span style="color:#888;font-weight:700;">SINGLE POINT · image-above-aperture fix applied · 20 rays</span>
     <span></span>
     <span style="color:#666;">f₁/d=0.917 · f₂/d=1.079 · ap/D=0.080 → window 55.05° (23.45°–78.50°)</span>
@@ -1521,7 +1572,7 @@ Ratios scale to any device size.</span>`;
 
   <!-- RUN 4 -->
   <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
-    <span style="color:#555;">2026-05-04 #4</span>
+    <span style="color:#555;">2026-05-06 #4</span>
     <span style="color:#888;font-weight:700;">3-POINT OBJECT · ap/D as search variable · coarse+refine · 20 rays</span>
     <span></span>
     <span style="color:#666;">f₁/d=0.917 · f₂/d=1.079 · ap/D=0.080 → window 55.05° (23.45°–78.50°)</span>
@@ -1531,7 +1582,7 @@ Ratios scale to any device size.</span>`;
 
   <!-- RUN 5 -->
   <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
-    <span style="color:#555;">2026-05-04 #5</span>
+    <span style="color:#555;">2026-05-06 #5</span>
     <span style="color:#888;font-weight:700;">3-POINT OBJECT · ap/D variable · hard imgY=0 · 40 rays · d_sep 60–150mm</span>
     <span></span>
     <span style="color:#666;">f₁/d=0.9290 · f₂/d=1.0850 · ap/D=0.100 · d=60mm → window 57.99° (22.56°–80.54°)</span>
@@ -1541,7 +1592,7 @@ Ratios scale to any device size.</span>`;
 
   <!-- RUN 6 — BEST SO FAR -->
   <div style="background:#0a1a0a;padding:0.65rem 1rem;margin-bottom:1px;border-left:2px solid #40f040;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
-    <span style="color:#40f040;">2026-05-04 #6</span>
+    <span style="color:#40f040;">2026-05-06 #6</span>
     <span style="color:#40f040;font-weight:700;">CONFIRMED — d_sep range extended to 30mm · ratios held · parabolic ceiling set</span>
     <span></span>
     <span style="color:#ccc;">f₁/d=0.9230 · f₂/d=1.0910 · ap/D=0.100 · d=40mm → window <strong>58.18°</strong> (22.29°–80.47°)</span>
