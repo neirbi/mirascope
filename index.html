@@ -1316,11 +1316,11 @@ function runOptimizer() {
   const OBJ_PCT = parseFloat(document.getElementById('sop').value) / 100;
   const nRays = 40;
 
-  // Coarse search: r1, r2 in 50 steps, d in 10 steps, ap in 5 steps
-  // 50 × 50 × 10 × 5 = 125,000 configs × 3 heights = 375,000 traces
+  // Coarse search: r1, r2 in 50 steps, d in 13 steps, ap in 5 steps
+  // 50 × 50 × 13 × 5 = 162,500 configs × 3 heights = 487,500 traces
   const r1Vals  = Array.from({length:50}, (_,i) => 0.5 + i*0.03);   // f1/d_sep 0.50–1.97
   const r2Vals  = Array.from({length:50}, (_,i) => 0.5 + i*0.03);   // f2/d_sep 0.50–1.97
-  const dVals   = Array.from({length:10}, (_,i) => 60 + i*10);      // d_sep 60–150mm
+  const dVals   = Array.from({length:13}, (_,i) => 30 + i*10);      // d_sep 30–150mm
   const apRatios = [0.10, 0.13, 0.15, 0.18, 0.20];                  // aperture/D
 
   let best = null;
@@ -1529,26 +1529,37 @@ Ratios scale to any device size.</span>`;
     <span style="color:#555;font-style:italic;">3-point intersection added. Ratios held from run 3 — result is stable. Aperture ratio confirmed at 0.08.</span>
   </div>
 
-  <!-- RUN 5 — BEST SO FAR -->
+  <!-- RUN 5 -->
+  <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
+    <span style="color:#555;">2026-05-04 #5</span>
+    <span style="color:#888;font-weight:700;">3-POINT OBJECT · ap/D variable · hard imgY=0 · 40 rays · d_sep 60–150mm</span>
+    <span></span>
+    <span style="color:#666;">f₁/d=0.9290 · f₂/d=1.0850 · ap/D=0.100 · d=60mm → window 57.99° (22.56°–80.54°)</span>
+    <span></span>
+    <span style="color:#555;font-style:italic;">Ratios stable vs 20-ray result. 32% wider than canonical. d_sep hitting floor of search range at 60mm — needs investigation.</span>
+  </div>
+
+  <!-- RUN 6 — BEST SO FAR -->
   <div style="background:#0a1a0a;padding:0.65rem 1rem;margin-bottom:1px;border-left:2px solid #40f040;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
-    <span style="color:#40f040;">2026-05-04 #5</span>
-    <span style="color:#40f040;font-weight:700;">BEST — 3-point · ap/D variable · hard imgY=0 · 40 rays</span>
+    <span style="color:#40f040;">2026-05-04 #6</span>
+    <span style="color:#40f040;font-weight:700;">CONFIRMED — d_sep range extended to 30mm · ratios held · parabolic ceiling set</span>
     <span></span>
-    <span style="color:#ccc;">f₁/d=0.9290 · f₂/d=1.0850 · ap/D=0.100 → window <strong>57.99°</strong> (22.56°–80.54°)</span>
+    <span style="color:#ccc;">f₁/d=0.9230 · f₂/d=1.0910 · ap/D=0.100 · d=40mm → window <strong>58.18°</strong> (22.29°–80.47°)</span>
     <span></span>
-    <span style="color:#888;font-style:italic;">Ratios shifted only ~1% from 20-ray result — confirms stability. 32% wider than canonical 44°.
-      Bottom mirror shorter focal length, top longer. Aperture = 10% of diameter. Spread 0.70mm sharp.</span>
+    <span style="color:#888;font-style:italic;">d_sep dropped to 40mm but window width unchanged at ~58°. Ratios shifted &lt;1% across all runs.
+      Three independent confirmations of same answer. Parabolic ceiling is real and confirmed.</span>
   </div>
 
   <!-- FINDINGS -->
   <div style="background:#0d0d0d;border-left:4px solid #555;padding:0.75rem 1rem;margin-bottom:1px;color:#888;">
-    <div style="color:#999;font-weight:700;margin-bottom:0.4rem;">KEY FINDINGS — parabolic family ceiling</div>
-    <div style="margin-bottom:0.25rem;">① Optimal parabolic mirascope is <span style="color:#ccc;">asymmetric</span> — f₁ ≠ f₂. Every commercial unit is wrong.</div>
-    <div style="margin-bottom:0.25rem;">② Bottom mirror focal length ~7% shorter than separation. Top ~8% longer. Ratio consistent across all runs.</div>
+    <div style="color:#999;font-weight:700;margin-bottom:0.4rem;">KEY FINDINGS — parabolic family ceiling CONFIRMED</div>
+    <div style="margin-bottom:0.25rem;">① Optimal parabolic mirascope is <span style="color:#ccc;">asymmetric</span> — f₁ ≠ f₂. Every commercial unit uses identical mirrors. That is suboptimal.</div>
+    <div style="margin-bottom:0.25rem;">② Confirmed ratios: <span style="color:#ccc;">f₁/d ≈ 0.923 · f₂/d ≈ 1.091</span> — bottom mirror shorter, top longer. Stable across 6 runs.</div>
     <div style="margin-bottom:0.25rem;">③ Optimal aperture = <span style="color:#ccc;">10% of mirror diameter</span>, not the typical 15–20%.</div>
-    <div style="margin-bottom:0.25rem;">④ True viewing window for whole object: <span style="color:#40f040;font-weight:700;">~58°</span> vs canonical <span style="color:#d44;">~44°</span> — 32% improvement.</div>
-    <div style="margin-bottom:0.25rem;">⑤ These are <span style="color:#ccc;">dimensionless ratios</span> — scale to any device size.</div>
-    <div style="color:#555;margin-top:0.5rem;">⬡ Parabolic ceiling established. Non-parabolic search is next phase.</div>
+    <div style="margin-bottom:0.25rem;">④ d_sep does not affect viewing window width — only device scale. Ratios are all that matter.</div>
+    <div style="margin-bottom:0.25rem;">⑤ True viewing window for whole object: <span style="color:#40f040;font-weight:700;">~58°</span> vs canonical <span style="color:#d44;">~44°</span> — <span style="color:#40f040;font-weight:700;">32% improvement</span> within parabolic family.</div>
+    <div style="margin-bottom:0.25rem;">⑥ These are <span style="color:#ccc;">dimensionless ratios</span> — multiply by any d_sep to get real dimensions.</div>
+    <div style="color:#555;margin-top:0.5rem;">⬡ Parabolic phase complete. Ceiling confirmed at ~58°. Non-parabolic search is next phase.</div>
   </div>
 
 </div>
