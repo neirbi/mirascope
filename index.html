@@ -1305,6 +1305,7 @@
                             <span>real image Ø: <span class="sim__stat-value" id="sim-stat-imgd">—</span></span>
                             <span>magnification: <span class="sim__stat-value" id="sim-stat-mag">—</span></span>
                             <span>viewing angle: <span class="sim__stat-value" id="sim-stat-angle">—</span></span>
+                            <span>spot RMS — R <span class="sim__stat-value" id="sim-stat-spot-r">—</span> · G <span class="sim__stat-value" id="sim-stat-spot-g">—</span> · B <span class="sim__stat-value" id="sim-stat-spot-b">—</span></span>
                             <span>rays traced: <span class="sim__stat-value" id="sim-stat-traced">—</span></span>
                             <span>image-forming: <span class="sim__stat-value" id="sim-stat-escaped">—</span></span>
                             <span>total bounces: <span class="sim__stat-value" id="sim-stat-bounces">—</span></span>
@@ -1818,7 +1819,36 @@
                                 imagePoint = raw;
                             }
                         }
-                        return { ledX, objY, traces, imagePoint, color: LED_COLORS[i] };
+
+                        // Spot diagram. Project each escaped ray to the image plane
+                        // (y = imagePoint.y) and record its x-offset from the LSQ
+                        // centroid. The set of offsets is the spot pattern; RMS of
+                        // the offsets is the standard optical-engineering measure of
+                        // imaging quality. A tight spot (RMS ≪ 1 mm) means the
+                        // geometry images well; a wide spot is aberration. This is
+                        // the lab observable that bounds how well any "image" claim
+                        // can be defended — a measured image position is only
+                        // meaningful to within ±RMS spot.
+                        let spot = null;
+                        if (imagePoint && escapedRays.length > 0) {
+                            const [ix, iy] = imagePoint;
+                            const offsets = [];
+                            for (const { point: [ex, ey], dir: [vx, vy] } of escapedRays) {
+                                if (Math.abs(vy) < 1e-12) continue;
+                                const t = (iy - ey) / vy;
+                                offsets.push(ex + t * vx - ix);
+                            }
+                            if (offsets.length > 0) {
+                                const sumSq = offsets.reduce((s, d) => s + d * d, 0);
+                                spot = {
+                                    rms: Math.sqrt(sumSq / offsets.length),
+                                    max: offsets.reduce((m, d) => Math.max(m, Math.abs(d)), 0),
+                                    extent: Math.max(...offsets) - Math.min(...offsets),
+                                    offsets,
+                                };
+                            }
+                        }
+                        return { ledX, objY, traces, imagePoint, spot, color: LED_COLORS[i] };
                     });
 
                     // Determine viewBox top: enough room for the focus + diverging tail of
@@ -1931,15 +1961,31 @@
                             cx: ledX, cy: objY, r: 1.8, fill: color,
                         }));
 
-                        // Image marker at the real 2-D convergence point
+                        // Spot diagram + LSQ-centroid marker. Each escaped ray is
+                        // projected to the image plane (y = imagePoint.y) and drawn
+                        // as a filled dot — that's the spot pattern. The hollow
+                        // ring marks the LSQ centroid (the "best image" position).
+                        // For a perfectly imaging geometry the dots collapse onto
+                        // the ring; aberration is visible directly as horizontal
+                        // spread of the dots — the optical-lab observable for
+                        // imaging quality.
                         if (imagePoint) {
                             const [imgX, imgY] = imagePoint;
+                            traces.forEach((result) => {
+                                if (!result.escaped || !result.exitPoint || !result.exitDir) return;
+                                const [ex, ey] = result.exitPoint;
+                                const [vx, vy] = result.exitDir;
+                                if (Math.abs(vy) < 1e-12) return;
+                                const t = (imgY - ey) / vy;
+                                root.appendChild(make('circle', {
+                                    cx: ex + t * vx, cy: imgY, r: 0.4,
+                                    fill: color, opacity: '0.7',
+                                }));
+                            });
                             root.appendChild(make('circle', {
-                                cx: imgX, cy: imgY, r: 3,
-                                fill: color, opacity: '0.25',
-                            }));
-                            root.appendChild(make('circle', {
-                                cx: imgX, cy: imgY, r: 1.5, fill: color,
+                                cx: imgX, cy: imgY, r: 1.6,
+                                fill: 'none', stroke: color, 'stroke-width': '0.4',
+                                opacity: '0.85',
                             }));
                         }
                     });
@@ -1984,6 +2030,20 @@
                     document.getElementById('sim-stat-imgd').textContent = imgD !== null ? `${imgD.toFixed(1)} mm` : '—';
                     document.getElementById('sim-stat-mag').textContent = mag !== null ? `${mag.toFixed(2)}×` : '—';
                     document.getElementById('sim-stat-angle').textContent = totalEscaped > 0 ? `${maxHalfAngle.toFixed(0)}°` : '—';
+
+                    // Spot RMS per LED — auto-scaled units so a 50 nm focus reads
+                    // distinct from a 50 µm or 5 mm one.
+                    const fmtSpot = (s) => {
+                        if (!s) return '—';
+                        const v = s.rms;
+                        if (v < 1e-3) return `${(v * 1e6).toFixed(0)} nm`;
+                        if (v < 1) return `${(v * 1e3).toFixed(2)} µm`;
+                        return `${v.toFixed(2)} mm`;
+                    };
+                    document.getElementById('sim-stat-spot-r').textContent = fmtSpot(ledData[0].spot);
+                    document.getElementById('sim-stat-spot-g').textContent = fmtSpot(ledData[1].spot);
+                    document.getElementById('sim-stat-spot-b').textContent = fmtSpot(ledData[2].spot);
+
                     document.getElementById('sim-stat-traced').textContent = totalTraced;
                     document.getElementById('sim-stat-escaped').textContent = totalEscaped;
                     document.getElementById('sim-stat-bounces').textContent = totalEscaped * p.nbounces;
