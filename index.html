@@ -1584,13 +1584,15 @@
                         }
 
                         // Real 2-D convergence point — where all escaped rays meet.
-                        // Reject results above a sane horizon: near-parallel ray bundles
-                        // (on-axis LED) produce a singular system and a junk far point —
-                        // we treat those as "no finite focus" and just fan the rays.
+                        // In the canonical mirascope (d_sep = f, h_obj = 0) the image
+                        // forms exactly on the aperture plane (y = vy2), not above it —
+                        // so a strict `> vy2` test rejects valid images. Match the
+                        // reference's 5 mm slack below the aperture, and bound far-away
+                        // singular results from near-parallel bundles at 3·d_sep above.
                         const raw = findConvergence(escapedRays);
                         const imagePoint = (raw
                             && Number.isFinite(raw[0]) && Number.isFinite(raw[1])
-                            && raw[1] > p.vy2
+                            && raw[1] >= p.vy2 - 5
                             && raw[1] < p.vy2 + p.dsep * 3)
                             ? raw : null;
                         return { ledX, objY, traces, imagePoint, color: LED_COLORS[i] };
