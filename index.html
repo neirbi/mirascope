@@ -1035,18 +1035,36 @@
             display: inline-block;
         }
 
+        /* Stats panel — read-only output cards arranged in a grid so every
+           field lines up regardless of value length. Each card visually
+           mirrors a form input (same surface, radius, mono type) with the
+           value on top and the descriptor below. */
         .sim__stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+            gap: var(--space-xs);
+            padding-top: var(--space-sm);
+        }
+        .sim__stat {
             display: flex;
-            flex-wrap: wrap;
-            gap: var(--space-md) var(--space-lg);
+            flex-direction: column;
+            gap: 0.125rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--color-bg-surface);
+            border-radius: var(--radius-sm);
             font-family: var(--font-mono);
             font-size: var(--text-sm);
-            color: var(--color-text-secondary);
-            padding-top: var(--space-sm);
+            min-width: 0;
         }
         .sim__stat-value {
             color: var(--color-text-primary);
             font-weight: var(--weight-semibold);
+            line-height: 1.3;
+        }
+        .sim__stat-label {
+            color: var(--color-text-tertiary);
+            font-size: 0.75rem;
+            line-height: 1.4;
         }
 
 
@@ -1299,16 +1317,54 @@
                         </div>
 
                         <div class="sim__stats" id="sim-stats">
-                            <span>D (mirror diameter): <span class="sim__stat-value" id="sim-stat-D">—</span></span>
-                            <span>mirror depth: <span class="sim__stat-value" id="sim-stat-depth">—</span></span>
-                            <span>real image height: <span class="sim__stat-value" id="sim-stat-imgh">—</span></span>
-                            <span>real image Ø: <span class="sim__stat-value" id="sim-stat-imgd">—</span></span>
-                            <span>magnification: <span class="sim__stat-value" id="sim-stat-mag">—</span></span>
-                            <span>viewing angle: <span class="sim__stat-value" id="sim-stat-angle">—</span></span>
-                            <span>spot RMS — R <span class="sim__stat-value" id="sim-stat-spot-r">—</span> · G <span class="sim__stat-value" id="sim-stat-spot-g">—</span> · B <span class="sim__stat-value" id="sim-stat-spot-b">—</span></span>
-                            <span>rays traced: <span class="sim__stat-value" id="sim-stat-traced">—</span></span>
-                            <span>image-forming: <span class="sim__stat-value" id="sim-stat-escaped">—</span></span>
-                            <span>total bounces: <span class="sim__stat-value" id="sim-stat-bounces">—</span></span>
+                            <div class="sim__stat">
+                                <span class="sim__stat-value" id="sim-stat-D">—</span>
+                                <span class="sim__stat-label">D (mirror diameter)</span>
+                            </div>
+                            <div class="sim__stat">
+                                <span class="sim__stat-value" id="sim-stat-depth">—</span>
+                                <span class="sim__stat-label">mirror depth</span>
+                            </div>
+                            <div class="sim__stat">
+                                <span class="sim__stat-value" id="sim-stat-imgh">—</span>
+                                <span class="sim__stat-label">real image height</span>
+                            </div>
+                            <div class="sim__stat">
+                                <span class="sim__stat-value" id="sim-stat-imgd">—</span>
+                                <span class="sim__stat-label">real image Ø</span>
+                            </div>
+                            <div class="sim__stat">
+                                <span class="sim__stat-value" id="sim-stat-mag">—</span>
+                                <span class="sim__stat-label">magnification</span>
+                            </div>
+                            <div class="sim__stat">
+                                <span class="sim__stat-value" id="sim-stat-angle">—</span>
+                                <span class="sim__stat-label">viewing angle</span>
+                            </div>
+                            <div class="sim__stat">
+                                <span class="sim__stat-value" id="sim-stat-spot-r">—</span>
+                                <span class="sim__stat-label">spot RMS (red)</span>
+                            </div>
+                            <div class="sim__stat">
+                                <span class="sim__stat-value" id="sim-stat-spot-g">—</span>
+                                <span class="sim__stat-label">spot RMS (green)</span>
+                            </div>
+                            <div class="sim__stat">
+                                <span class="sim__stat-value" id="sim-stat-spot-b">—</span>
+                                <span class="sim__stat-label">spot RMS (blue)</span>
+                            </div>
+                            <div class="sim__stat">
+                                <span class="sim__stat-value" id="sim-stat-traced">—</span>
+                                <span class="sim__stat-label">rays traced</span>
+                            </div>
+                            <div class="sim__stat">
+                                <span class="sim__stat-value" id="sim-stat-escaped">—</span>
+                                <span class="sim__stat-label">image-forming</span>
+                            </div>
+                            <div class="sim__stat">
+                                <span class="sim__stat-value" id="sim-stat-bounces">—</span>
+                                <span class="sim__stat-label">total bounces</span>
+                            </div>
                         </div>
 
                         <div class="sim__validator" id="sim-validator" hidden>
