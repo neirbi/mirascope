@@ -1206,7 +1206,9 @@
                         <div class="sim__stats" id="sim-stats">
                             <span>D (mirror diameter): <span class="sim__stat-value" id="sim-stat-D">—</span></span>
                             <span>mirror depth: <span class="sim__stat-value" id="sim-stat-depth">—</span></span>
-                            <span>image height: <span class="sim__stat-value" id="sim-stat-imgh">—</span></span>
+                            <span>real image height: <span class="sim__stat-value" id="sim-stat-imgh">—</span></span>
+                            <span>real image Ø: <span class="sim__stat-value" id="sim-stat-imgd">—</span></span>
+                            <span>magnification: <span class="sim__stat-value" id="sim-stat-mag">—</span></span>
                             <span>viewing angle: <span class="sim__stat-value" id="sim-stat-angle">—</span></span>
                             <span>rays traced: <span class="sim__stat-value" id="sim-stat-traced">—</span></span>
                             <span>image-forming: <span class="sim__stat-value" id="sim-stat-escaped">—</span></span>
@@ -1767,9 +1769,26 @@
                         });
                     });
 
+                    // Real image diameter — distance between the red and blue convergence
+                    // points along x. The object is a circle in cross-section so red
+                    // (object x = −d/2) maps to image x = +img_d/2 and vice versa; the
+                    // separation between those image points is the real-image diameter.
+                    // Magnification is image Ø ÷ object Ø: > 1 means the real image is
+                    // physically larger than the object, which the canonical formula
+                    // m = f / (f − h_obj) predicts whenever h_obj > 0.
+                    const redImg = ledData[0].imagePoint;
+                    const blueImg = ledData[2].imagePoint;
+                    let imgD = null, mag = null;
+                    if (redImg && blueImg) {
+                        imgD = Math.abs(redImg[0] - blueImg[0]);
+                        if (p.obj_d > 0) mag = imgD / p.obj_d;
+                    }
+
                     document.getElementById('sim-stat-D').textContent = `${p.D.toFixed(1)} mm`;
                     document.getElementById('sim-stat-depth').textContent = `${depth.toFixed(1)} mm`;
                     document.getElementById('sim-stat-imgh').textContent = imgH !== null ? `${imgH.toFixed(1)} mm` : '—';
+                    document.getElementById('sim-stat-imgd').textContent = imgD !== null ? `${imgD.toFixed(1)} mm` : '—';
+                    document.getElementById('sim-stat-mag').textContent = mag !== null ? `${mag.toFixed(2)}×` : '—';
                     document.getElementById('sim-stat-angle').textContent = totalEscaped > 0 ? `${maxHalfAngle.toFixed(0)}°` : '—';
                     document.getElementById('sim-stat-traced').textContent = totalTraced;
                     document.getElementById('sim-stat-escaped').textContent = totalEscaped;
