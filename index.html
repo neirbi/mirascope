@@ -1769,7 +1769,13 @@
                     const ledOffsets = [-p.obj_d / 2, 0, +p.obj_d / 2];
                     const ledData = ledOffsets.map((ledX, i) => {
                         // Object position: on M1 surface at offset ledX
-                        const objY = parabolaY(ledX, p.f1, +1, p.vy1) + p.h_obj + EPS * 10;
+                        // LED sits exactly on M1's surface (plus h_obj). No defensive
+                        // offset: intersectM1's t > EPS guard already rejects the t=0
+                        // self-intersection at the LED's own position, and an offset
+                        // here would corrupt the source coordinate by exactly that
+                        // amount — visible as a 1 µm bias in the KAT image-height
+                        // residual back when this read `+ EPS * 10`.
+                        const objY = parabolaY(ledX, p.f1, +1, p.vy1) + p.h_obj;
                         const traces = [];
                         const escapedRays = []; // { point, dir } for each escaped ray at aperture
 
