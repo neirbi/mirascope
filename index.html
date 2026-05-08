@@ -1190,23 +1190,23 @@
                             <p class="sim__group-label">Geometry</p>
                             <div class="sim__field">
                                 <label for="sim-f1">f<sub>1</sub> (bottom)</label>
-                                <input type="number" id="sim-f1" value="50" step="1" min="10" max="200">
+                                <input type="number" id="sim-f1" value="80" step="1" min="10" max="200">
                             </div>
                             <div class="sim__field">
                                 <label for="sim-f2">f<sub>2</sub> (top)</label>
-                                <input type="number" id="sim-f2" value="50" step="1" min="10" max="200">
+                                <input type="number" id="sim-f2" value="80" step="1" min="10" max="200">
                             </div>
                             <div class="sim__field">
                                 <label for="sim-dsep">d<sub>sep</sub></label>
-                                <input type="number" id="sim-dsep" value="100" step="1" min="10" max="400">
-                            </div>
-                            <div class="sim__field">
-                                <label for="sim-D">D (diameter)</label>
-                                <input type="number" id="sim-D" value="200" step="1" min="40" max="600">
+                                <input type="number" id="sim-dsep" value="80" step="1" min="20" max="300">
                             </div>
                             <div class="sim__field">
                                 <label for="sim-aperture">a (aperture)</label>
-                                <input type="number" id="sim-aperture" value="20" step="1" min="2" max="100">
+                                <input type="number" id="sim-aperture" value="60" step="1" min="2" max="200">
+                            </div>
+                            <div class="sim__field">
+                                <label for="sim-hobj">h<sub>obj</sub></label>
+                                <input type="number" id="sim-hobj" value="0" step="1" min="0" max="80">
                             </div>
                         </div>
 
@@ -1214,7 +1214,7 @@
                             <p class="sim__group-label">Rays</p>
                             <div class="sim__field">
                                 <label for="sim-rays">per LED</label>
-                                <input type="number" id="sim-rays" value="64" step="1" min="4" max="500">
+                                <input type="number" id="sim-rays" value="12" step="1" min="3" max="60">
                             </div>
                             <div class="sim__field">
                                 <label for="sim-bounces">reflections</label>
@@ -1289,76 +1289,87 @@
             });
 
             // ─────────────────────────────────────────────────────────
-            // SIMULATOR — ray-trace 2-bounce mirascope geometry
-            // Bottom mirror M1: y = x²/(4f₁), opens upward, vertex (0,0)
-            // Top mirror M2:    y = d_sep − x²/(4f₂), opens downward
-            // Aperture: gap in M2 where |x| < a/2
-            // LEDs sit on M1 surface at x = -10, 0, +10
+            // SIMULATOR — ray-trace 2-reflection mirascope geometry
+            //
+            // Coordinate system (centered):
+            //   M1 vertex at (0, -dsep/2), opens UP:    y = x²/(4f₁) - dsep/2
+            //   M2 vertex at (0, +dsep/2), opens DOWN:  y = -x²/(4f₂) + dsep/2
+            //   Object on M1 axis at (0, -dsep/2 + h_obj)
+            //
+            // Rim diameter D is DERIVED from where M1 and M2 meet:
+            //   x²/(4f₁) - dsep/2 = -x²/(4f₂) + dsep/2
+            //   x² = 4·f₁·f₂·dsep / (f₁ + f₂)
+            //
+            // Topology: object emits → M2 (reflection 1) → M1 (reflection 2)
+            //                       → line-plane test against y = vy2:
+            //                            inside aperture → escapes
+            //                            outside but on M2 surface → trapped
+            //                            outside rim → trapped
+            //
+            // Convergence: each escaped ray's intersection with x=0 gives one
+            // y-coordinate; image y = mean of those (axis symmetry argument).
             // ─────────────────────────────────────────────────────────
             const sim = (() => {
                 const svg = document.getElementById('sim-svg');
-                if (!svg) return; // simulator not on this page
+                if (!svg) return;
 
                 const SVG_NS = 'http://www.w3.org/2000/svg';
-                const EPS = 1e-4; // self-intersection guard for bounce rays
+                const EPS = 1e-4;
 
-                // LED colors — match the legend dots
                 const LED_COLORS = ['#E63946', '#2FAE6F', '#0071E3'];
-                const LED_OFFSETS = [-10, 0, 10]; // x positions on M1
+                const LED_OFFSETS = [-10, 0, 10]; // x positions (relative to axis)
 
-                // Read all parameters from the inputs
-                const readParams = () => ({
-                    f1:    Math.max(1, +document.getElementById('sim-f1').value),
-                    f2:    Math.max(1, +document.getElementById('sim-f2').value),
-                    dsep:  Math.max(1, +document.getElementById('sim-dsep').value),
-                    D:     Math.max(2, +document.getElementById('sim-D').value),
-                    a:     Math.max(0, +document.getElementById('sim-aperture').value),
-                    nrays: Math.max(1, Math.floor(+document.getElementById('sim-rays').value)),
-                    nbounces: Math.max(1, Math.floor(+document.getElementById('sim-bounces').value)),
-                });
+                const readParams = () => {
+                    const f1 = Math.max(1, +document.getElementById('sim-f1').value);
+                    const f2 = Math.max(1, +document.getElementById('sim-f2').value);
+                    const dsep = Math.max(1, +document.getElementById('sim-dsep').value);
+                    const a = Math.max(0, +document.getElementById('sim-aperture').value);
+                    const h_obj = Math.max(0, +document.getElementById('sim-hobj').value);
+                    const nrays = Math.max(1, Math.floor(+document.getElementById('sim-rays').value));
+                    const nbounces = Math.max(2, Math.floor(+document.getElementById('sim-bounces').value));
 
-                // Parabola y-value at x for a mirror.
-                // s = +1 for M1 (opens up at y=0), s = -1 for M2 (opens down at y=dsep).
+                    // Derived rim. Guard against zero or negative.
+                    const rimSq = (4 * f1 * f2 * dsep) / (f1 + f2);
+                    const halfW = rimSq > 0 ? Math.sqrt(rimSq) : 0;
+
+                    return {
+                        f1, f2, dsep, a, h_obj, nrays, nbounces,
+                        vy1: -dsep / 2,
+                        vy2: +dsep / 2,
+                        halfW,
+                        D: 2 * halfW,
+                    };
+                };
+
+                // Parabola y at x for a mirror.
+                // s = +1 for M1 (opens up at vy1), s = -1 for M2 (opens down at vy2)
                 const parabolaY = (x, f, s, vy) => vy + s * (x * x) / (4 * f);
 
-                // Ray–parabola intersection.
-                // Ray: x(t) = ox + t·dx, y(t) = oy + t·dy
-                // Mirror: s·(y − vy) = x²/(4f)  →  s·dy·t + s·(oy − vy) = (ox + t·dx)²/(4f)
+                // Ray–parabola intersection (Card 3).
                 // Quadratic in t: A·t² + B·t + C = 0
-                //   A = dx² / (4f)
-                //   B = (2·ox·dx)/(4f) − s·dy
-                //   C = ox²/(4f) − s·(oy − vy)
-                // Returns smallest t > tMin, or null if no valid intersection.
                 const intersectParabola = (ox, oy, dx, dy, f, s, vy, tMin) => {
                     const inv4f = 1 / (4 * f);
                     const A = dx * dx * inv4f;
                     const B = 2 * ox * dx * inv4f - s * dy;
                     const C = ox * ox * inv4f - s * (oy - vy);
 
-                    let t1, t2;
                     if (Math.abs(A) < 1e-12) {
-                        // Linear case: B·t + C = 0
                         if (Math.abs(B) < 1e-12) return null;
                         const t = -C / B;
                         return t > tMin ? t : null;
-                    } else {
-                        const disc = B * B - 4 * A * C;
-                        if (disc < 0) return null;
-                        const sq = Math.sqrt(disc);
-                        t1 = (-B - sq) / (2 * A);
-                        t2 = (-B + sq) / (2 * A);
                     }
-
-                    // Smallest positive t (Card 3 — selection rule)
+                    const disc = B * B - 4 * A * C;
+                    if (disc < 0) return null;
+                    const sq = Math.sqrt(disc);
+                    const t1 = (-B - sq) / (2 * A);
+                    const t2 = (-B + sq) / (2 * A);
                     let best = Infinity;
                     if (t1 > tMin && t1 < best) best = t1;
                     if (t2 > tMin && t2 < best) best = t2;
                     return Number.isFinite(best) ? best : null;
                 };
 
-                // Surface normal at point (x) on a parabola.
-                // Unnormalized: ñ = (−x/2f, s) where s flips for M2.
-                // Returns unit normal pointing into the bowl (toward rays).
+                // Surface normal (Card 1): unnormalized ñ = (-x/2f, s)
                 const surfaceNormal = (x, f, s) => {
                     const nx = -x / (2 * f);
                     const ny = s;
@@ -1366,133 +1377,134 @@
                     return [nx / len, ny / len];
                 };
 
-                // Reflect direction d across normal n: r = d − 2(d·n)·n
+                // Reflection (Card 2): r = d - 2(d·n)n
                 const reflect = (dx, dy, nx, ny) => {
                     const dot = dx * nx + dy * ny;
                     return [dx - 2 * dot * nx, dy - 2 * dot * ny];
                 };
 
-                // Trace a single ray from (ox, oy) in direction (dx, dy).
-                // Mirascope ray topology:
-                //   LED emits → ray bounces between M1 and M2 → eventually
-                //   either escapes through aperture or absorbs at the rim.
-                // The first clear image forms after FOUR reflections (Adhya
-                // & Noé 2007). Subsequent images at 6, 8, ... reflections.
-                // p.nbounces = required reflections before the exit through
-                // aperture is counted as image-forming.
+                // Where does ray (ox,oy)+t(dx,dy) cross the line y = lineY?
+                // Returns x at crossing, or null if ray parallel or behind origin.
+                const rayCrossesY = (ox, oy, dx, dy, lineY) => {
+                    if (Math.abs(dy) < 1e-12) return null;
+                    const t = (lineY - oy) / dy;
+                    if (t <= 0) return null;
+                    return ox + t * dx;
+                };
+
+                // Trace one ray. Performs nbounces reflections, then tests whether
+                // the final straight-line segment exits through the aperture.
+                // Returns:
+                //   points: polyline including final exit segment (drawn or trapped)
+                //   escaped: true iff all reflections completed AND final segment
+                //            crosses aperture plane within aperture without first
+                //            hitting M2's solid annulus
+                //   exitPoint, exitDir: the exiting half-line (only if escaped)
                 const traceRay = (ox, oy, dx, dy, p) => {
                     const points = [[ox, oy]];
                     let x = ox, y = oy, vx = dx, vy = dy;
-                    let reflections = 0;
                     let escaped = false;
                     let exitPoint = null, exitDir = null;
-                    // One extra step beyond reflections to allow the exit interaction
-                    const MAX_STEPS = p.nbounces + 1;
 
-                    for (let step = 0; step < MAX_STEPS; step++) {
-                        const t1 = intersectParabola(x, y, vx, vy, p.f1, +1, 0, EPS);
-                        const t2 = intersectParabola(x, y, vx, vy, p.f2, -1, p.dsep, EPS);
+                    // Perform nbounces reflections
+                    for (let bounce = 0; bounce < p.nbounces; bounce++) {
+                        const t1 = intersectParabola(x, y, vx, vy, p.f1, +1, p.vy1, EPS);
+                        const t2 = intersectParabola(x, y, vx, vy, p.f2, -1, p.vy2, EPS);
 
                         let t = null, mirror = null;
                         if (t1 !== null && (t2 === null || t1 < t2)) { t = t1; mirror = 1; }
                         else if (t2 !== null) { t = t2; mirror = 2; }
-                        else break;
+                        else return { points, escaped: false, exitPoint: null, exitDir: null };
 
                         const hitX = x + t * vx;
                         const hitY = y + t * vy;
 
-                        // Rim check — hit must be within mirror diameter
-                        if (Math.abs(hitX) > p.D / 2) break;
+                        // Outside rim — ray misses, dies
+                        if (Math.abs(hitX) > p.halfW) return { points, escaped: false, exitPoint: null, exitDir: null };
 
-                        // Aperture check on M2
+                        // If first interaction is M2 INSIDE aperture, ray escapes
+                        // immediately without reflecting (a "leaky" path — still
+                        // valid trace but doesn't form image, count as not escaped
+                        // for image purposes). We still draw it so user sees the
+                        // direct-leak rays.
                         const inAperture = mirror === 2 && Math.abs(hitX) < p.a / 2;
-
-                        if (inAperture) {
-                            // Only count as image-forming exit if we've hit the
-                            // required reflection count. Earlier exits are leaky
-                            // paths and get discarded.
-                            if (reflections === p.nbounces) {
-                                exitPoint = [hitX, hitY];
-                                exitDir = [vx, vy];
-                                escaped = true;
-                            }
-                            break;
+                        if (inAperture && bounce < p.nbounces) {
+                            // Direct leak — draw a short stub and report not-escaped
+                            // (since it didn't go through the full reflection chain)
+                            points.push([hitX, hitY]);
+                            return { points, escaped: false, exitPoint: null, exitDir: null };
                         }
 
-                        // Reflect off this mirror
+                        // Reflect
                         points.push([hitX, hitY]);
                         const [nx, ny] = surfaceNormal(hitX, mirror === 1 ? p.f1 : p.f2, mirror === 1 ? +1 : -1);
                         [vx, vy] = reflect(vx, vy, nx, ny);
                         const dlen = Math.sqrt(vx * vx + vy * vy);
                         vx /= dlen; vy /= dlen;
                         x = hitX; y = hitY;
-                        reflections++;
                     }
 
-                    return { points, hits: reflections, escaped, exitPoint, exitDir };
-                };
-
-                // Compute the least-squares closest point of intersection for a
-                // bundle of half-lines. Each line is (point pᵢ, unit direction vᵢ).
-                // For each line, the perp-distance² from P to the line is
-                //   ‖(P − pᵢ) − ((P − pᵢ)·vᵢ)·vᵢ‖² = (P − pᵢ)ᵀ (I − vᵢvᵢᵀ) (P − pᵢ)
-                // Minimizing total over P:
-                //   M·P = b  where  M = Σ(I − vᵢvᵢᵀ),  b = Σ(I − vᵢvᵢᵀ)·pᵢ
-                // 2×2 explicit solve. Returns null if M is singular (parallel rays).
-                const closestIntersection = (lines) => {
-                    let M00 = 0, M01 = 0, M11 = 0;
-                    let b0 = 0, b1 = 0;
-                    for (const [p, v] of lines) {
-                        // Normalize direction (defensive)
-                        const len = Math.sqrt(v[0] * v[0] + v[1] * v[1]);
-                        const vx = v[0] / len, vy = v[1] / len;
-                        // I − vvᵀ
-                        const a00 = 1 - vx * vx;
-                        const a01 = -vx * vy;
-                        const a11 = 1 - vy * vy;
-                        M00 += a00; M01 += a01; M11 += a11;
-                        // (I − vvᵀ) · p
-                        b0 += a00 * p[0] + a01 * p[1];
-                        b1 += a01 * p[0] + a11 * p[1];
+                    // After nbounces reflections, ray is at (x,y) going (vx,vy).
+                    // Test exit: does this straight line cross y=vy2 within aperture
+                    // without first being blocked by M2's solid annulus?
+                    const tBlocked = intersectParabola(x, y, vx, vy, p.f2, -1, p.vy2, EPS);
+                    let blockedByM2 = false;
+                    if (tBlocked !== null) {
+                        const blockX = x + tBlocked * vx;
+                        if (Math.abs(blockX) >= p.a / 2 && Math.abs(blockX) <= p.halfW) {
+                            blockedByM2 = true;
+                            points.push([blockX, y + tBlocked * vy]);
+                        }
                     }
-                    const det = M00 * M11 - M01 * M01;
-                    if (Math.abs(det) < 1e-9) return null; // rays parallel
-                    const invDet = 1 / det;
-                    return [
-                        (M11 * b0 - M01 * b1) * invDet,
-                        (-M01 * b0 + M00 * b1) * invDet,
-                    ];
+
+                    if (!blockedByM2) {
+                        const exitX = rayCrossesY(x, y, vx, vy, p.vy2);
+                        if (exitX !== null && Math.abs(exitX) < p.a / 2) {
+                            // Escapes through aperture
+                            exitPoint = [exitX, p.vy2];
+                            exitDir = [vx, vy];
+                            escaped = true;
+                            // Don't push exitPoint into points yet; let render decide
+                            // how far up to draw
+                        } else if (exitX !== null) {
+                            // Crosses plane outside aperture — trapped
+                            points.push([exitX, p.vy2]);
+                        }
+                    }
+
+                    return { points, escaped, exitPoint, exitDir };
                 };
 
-                // Build SVG path "d" attribute for a parabola from -D/2 to +D/2
-                const parabolaPath = (f, s, vy, D) => {
-                    const N = 60;
+                // Build SVG path "d" for parabola arc from -halfW to +halfW
+                const parabolaPath = (f, s, vy, halfW) => {
+                    const N = 80;
                     let d = '';
                     for (let i = 0; i <= N; i++) {
-                        const x = -D / 2 + (i / N) * D;
+                        const x = -halfW + (i / N) * 2 * halfW;
                         const y = parabolaY(x, f, s, vy);
                         d += (i === 0 ? 'M' : 'L') + x.toFixed(3) + ' ' + y.toFixed(3) + ' ';
                     }
                     return d;
                 };
 
-                // Build a parabola path with an aperture gap (for M2)
-                const parabolaPathWithGap = (f, s, vy, D, a) => {
+                // Same but with a gap centered on x=0 of width `a` (for M2)
+                const parabolaPathWithGap = (f, s, vy, halfW, a) => {
                     const N = 60;
                     const halfA = a / 2;
-                    // Left segment: -D/2 to -a/2
-                    let leftPath = '';
-                    let rightPath = '';
+                    let d = '';
+                    // Left segment: -halfW to -halfA
                     for (let i = 0; i <= N; i++) {
-                        const xL = -D / 2 + (i / N) * (D / 2 - halfA);
-                        const yL = parabolaY(xL, f, s, vy);
-                        leftPath += (i === 0 ? 'M' : 'L') + xL.toFixed(3) + ' ' + yL.toFixed(3) + ' ';
-
-                        const xR = halfA + (i / N) * (D / 2 - halfA);
-                        const yR = parabolaY(xR, f, s, vy);
-                        rightPath += (i === 0 ? 'M' : 'L') + xR.toFixed(3) + ' ' + yR.toFixed(3) + ' ';
+                        const x = -halfW + (i / N) * (halfW - halfA);
+                        const y = parabolaY(x, f, s, vy);
+                        d += (i === 0 ? 'M' : 'L') + x.toFixed(3) + ' ' + y.toFixed(3) + ' ';
                     }
-                    return leftPath + rightPath;
+                    // Right segment: +halfA to +halfW
+                    for (let i = 0; i <= N; i++) {
+                        const x = halfA + (i / N) * (halfW - halfA);
+                        const y = parabolaY(x, f, s, vy);
+                        d += (i === 0 ? 'M' : 'L') + x.toFixed(3) + ' ' + y.toFixed(3) + ' ';
+                    }
+                    return d;
                 };
 
                 const make = (tag, attrs = {}) => {
@@ -1501,148 +1513,148 @@
                     return el;
                 };
 
-                // Main render
                 const run = () => {
                     const p = readParams();
+                    if (p.halfW < 1) return; // degenerate geometry
 
-                    // Reset SVG
                     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
-                    // First pass: trace all rays, collect escaped half-lines per LED
-                    let totalTraced = 0, totalEscaped = 0, totalHits = 0;
+                    let totalTraced = 0, totalEscaped = 0;
                     const ledData = LED_OFFSETS.map((ledX, i) => {
-                        const ledY = parabolaY(ledX, p.f1, +1, 0) + EPS * 10;
-                        const traces = []; // all ray traces for this LED
-                        const escapedLines = []; // [point, dir] pairs of escaped rays
+                        // Object position: on M1 surface at offset ledX
+                        const objY = parabolaY(ledX, p.f1, +1, p.vy1) + p.h_obj + EPS * 10;
+                        const traces = [];
+                        const axisCrossings = []; // y-coord where each escaped ray crosses x=0
 
                         for (let r = 0; r < p.nrays; r++) {
-                            const thetaMax = Math.PI * 0.45;
-                            const theta = -thetaMax + (2 * thetaMax * r) / (p.nrays - 1 || 1);
+                            // Centered sampling: (i + 0.5) / nrays
+                            const frac = (r + 0.5) / p.nrays;
+                            const angleDeg = -70 + 140 * frac;
+                            const theta = angleDeg * Math.PI / 180;
                             const dx = Math.sin(theta);
                             const dy = Math.cos(theta);
 
-                            const result = traceRay(ledX, ledY, dx, dy, p);
+                            const result = traceRay(ledX, objY, dx, dy, p);
                             totalTraced++;
-                            totalHits += result.hits;
                             if (result.escaped) {
                                 totalEscaped++;
-                                escapedLines.push([result.exitPoint, result.exitDir]);
+                                // Where does the escaping ray cross x=0?
+                                const [ex, ey] = result.exitPoint;
+                                const [vx, vy] = result.exitDir;
+                                if (Math.abs(vx) > 1e-9) {
+                                    const tAxis = -ex / vx;
+                                    if (tAxis > 0) {
+                                        axisCrossings.push(ey + tAxis * vy);
+                                    }
+                                }
                             }
                             traces.push(result);
                         }
 
-                        // Math-derived image point: least-squares closest point of
-                        // intersection of the escaped ray bundle. Falls back to the
-                        // mean exit point if there are too few rays to solve.
-                        let imagePoint = null;
-                        if (escapedLines.length >= 2) {
-                            imagePoint = closestIntersection(escapedLines);
-                        }
-                        if (!imagePoint && escapedLines.length > 0) {
-                            const mx = escapedLines.reduce((s, [pt]) => s + pt[0], 0) / escapedLines.length;
-                            const my = escapedLines.reduce((s, [pt]) => s + pt[1], 0) / escapedLines.length;
-                            imagePoint = [mx, my];
+                        // Image y = mean of axis crossings (uses symmetry: image x=0)
+                        let imageY = null;
+                        if (axisCrossings.length > 0) {
+                            imageY = axisCrossings.reduce((s, v) => s + v, 0) / axisCrossings.length;
                         }
 
-                        return { ledX, ledY, traces, imagePoint, color: LED_COLORS[i] };
+                        return { ledX, objY, traces, imageY, color: LED_COLORS[i] };
                     });
 
-                    // Determine viewBox top from the actual computed image points,
-                    // not from a hardcoded multiple of f₂. Use the highest image y
-                    // (or fall back to dsep + small headroom if no rays escaped).
-                    const imgYs = ledData.map(d => d.imagePoint ? d.imagePoint[1] : p.dsep)
-                                          .filter(y => Number.isFinite(y));
-                    const maxImgY = imgYs.length ? Math.max(...imgYs) : p.dsep;
+                    // Determine viewBox top from computed image positions
+                    const imgYs = ledData.map(d => d.imageY).filter(y => y !== null && Number.isFinite(y));
+                    const maxImgY = imgYs.length ? Math.max(p.vy2 + 20, ...imgYs) : p.vy2 + p.dsep * 0.5;
+                    const margin = Math.max(20, p.D * 0.1);
+                    const yMax = maxImgY + margin;
+                    const yMin = p.vy1 - margin;
+                    const halfWView = p.halfW + margin;
 
-                    // Pad viewBox around the device with a margin
-                    const margin = Math.max(20, p.D * 0.15);
-                    const yMin = -margin;
-                    const yMax = Math.max(p.dsep, maxImgY) + margin;
-                    const halfW = p.D / 2 + margin;
-
-                    // Group is flipped with scale(1,-1), so math y=Y renders at SVG y=-Y.
                     svg.setAttribute('viewBox',
-                        `${-halfW} ${-yMax} ${halfW * 2} ${yMax - yMin}`);
+                        `${-halfWView} ${-yMax} ${halfWView * 2} ${yMax - yMin}`);
 
                     const root = make('g', { transform: 'scale(1,-1)' });
                     svg.appendChild(root);
 
-                    // Mirror outlines — use currentColor so they theme automatically
+                    // Optical axis (subtle dashed line)
+                    root.appendChild(make('line', {
+                        x1: 0, y1: p.vy1 - margin * 0.5,
+                        x2: 0, y2: yMax,
+                        stroke: 'currentColor',
+                        'stroke-width': '0.3',
+                        'stroke-dasharray': '2 2',
+                        opacity: '0.2',
+                    }));
+
+                    // Mirrors
                     const mirrorAttrs = {
                         fill: 'none',
                         stroke: 'currentColor',
                         'stroke-width': '0.6',
                         'stroke-linecap': 'round',
-                        'stroke-linejoin': 'round',
                         opacity: '0.55',
                     };
-                    root.appendChild(make('path', { ...mirrorAttrs, d: parabolaPath(p.f1, +1, 0, p.D) }));
-                    root.appendChild(make('path', { ...mirrorAttrs, d: parabolaPathWithGap(p.f2, -1, p.dsep, p.D, p.a) }));
+                    root.appendChild(make('path', { ...mirrorAttrs, d: parabolaPath(p.f1, +1, p.vy1, p.halfW) }));
+                    root.appendChild(make('path', { ...mirrorAttrs, d: parabolaPathWithGap(p.f2, -1, p.vy2, p.halfW, p.a) }));
 
-                    // Second pass: render rays. Escaped rays draw from M2 exit to the
-                    // foot of perpendicular on the image point — the closest the ray
-                    // actually gets to converging.
-                    ledData.forEach(({ ledX, ledY, traces, imagePoint, color }) => {
+                    // Render rays
+                    ledData.forEach(({ ledX, objY, traces, imageY, color }) => {
                         traces.forEach((result) => {
-                            // Build the polyline point list
                             const pts = result.points.slice();
-
                             if (result.escaped && result.exitPoint && result.exitDir) {
+                                // Draw the escaped segment from M1 hit through aperture
+                                // and onward to the image plane (or a sensible distance)
                                 pts.push(result.exitPoint);
-                                if (imagePoint) {
-                                    // Foot of perpendicular from imagePoint onto the ray:
-                                    // closest point on the ray to the convergence point.
+                                if (imageY !== null && Number.isFinite(imageY)) {
                                     const [ex, ey] = result.exitPoint;
                                     const [vx, vy] = result.exitDir;
-                                    const len = Math.sqrt(vx * vx + vy * vy);
-                                    const ux = vx / len, uy = vy / len;
-                                    const wx = imagePoint[0] - ex;
-                                    const wy = imagePoint[1] - ey;
-                                    const tFoot = wx * ux + wy * uy;
-                                    if (tFoot > 0) {
-                                        pts.push([ex + tFoot * ux, ey + tFoot * uy]);
+                                    if (Math.abs(vy) > 1e-9) {
+                                        const tImg = (imageY - ey) / vy;
+                                        if (tImg > 0) {
+                                            pts.push([ex + tImg * vx, imageY]);
+                                        }
                                     }
                                 }
                             }
-
                             if (pts.length < 2) return;
                             const ptsStr = pts.map(([x, y]) => `${x.toFixed(3)},${y.toFixed(3)}`).join(' ');
                             root.appendChild(make('polyline', {
                                 points: ptsStr,
                                 fill: 'none',
                                 stroke: color,
-                                'stroke-width': '0.35',
+                                'stroke-width': '0.4',
                                 'stroke-linecap': 'round',
                                 'stroke-linejoin': 'round',
-                                opacity: result.escaped ? '0.75' : '0.18',
+                                opacity: result.escaped ? '0.85' : '0.22',
                             }));
                         });
 
-                        // LED marker
+                        // Object marker (LED)
                         root.appendChild(make('circle', {
-                            cx: ledX, cy: ledY, r: 1.8, fill: color,
+                            cx: ledX, cy: objY, r: 1.8, fill: color,
                         }));
 
-                        // Image marker — the mathematically computed convergence point
-                        if (imagePoint) {
+                        // Image marker
+                        if (imageY !== null && Number.isFinite(imageY)) {
+                            // For symmetry-based reconstruction: x is mirrored (image
+                            // forms at -ledX). Use mean of escaped axis crossings
+                            // for y, and -ledX for x.
+                            const imgX = -ledX;
                             root.appendChild(make('circle', {
-                                cx: imagePoint[0], cy: imagePoint[1], r: 3,
+                                cx: imgX, cy: imageY, r: 3,
                                 fill: color, opacity: '0.25',
                             }));
                             root.appendChild(make('circle', {
-                                cx: imagePoint[0], cy: imagePoint[1], r: 1.5, fill: color,
+                                cx: imgX, cy: imageY, r: 1.5, fill: color,
                             }));
                         }
                     });
 
-                    // Update stats
+                    // Stats
                     document.getElementById('sim-stat-traced').textContent = totalTraced;
                     document.getElementById('sim-stat-escaped').textContent = totalEscaped;
-                    document.getElementById('sim-stat-bounces').textContent = totalHits;
+                    document.getElementById('sim-stat-bounces').textContent = totalEscaped * p.nbounces;
                 };
 
                 document.getElementById('sim-run').addEventListener('click', run);
-                // Initial render so users see something on load
                 run();
 
                 return { run };
