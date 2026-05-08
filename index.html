@@ -1557,16 +1557,25 @@
                             traces.push(result);
                         }
 
-                        // Real 2-D convergence point — where all escaped rays meet
-                        const imagePoint = findConvergence(escapedRays);
+                        // Real 2-D convergence point — where all escaped rays meet.
+                        // Reject results above a sane horizon: near-parallel ray bundles
+                        // (on-axis LED) produce a singular system and a junk far point —
+                        // we treat those as "no finite focus" and just fan the rays.
+                        const raw = findConvergence(escapedRays);
+                        const imagePoint = (raw
+                            && Number.isFinite(raw[0]) && Number.isFinite(raw[1])
+                            && raw[1] > p.vy2
+                            && raw[1] < p.vy2 + p.dsep * 3)
+                            ? raw : null;
                         return { ledX, objY, traces, imagePoint, color: LED_COLORS[i] };
                     });
 
-                    // Determine viewBox top from computed image positions + diverging tail room
+                    // Determine viewBox top: enough room for the focus + diverging tail of
+                    // every LED, including ones without a finite focus (still fan a fixed
+                    // distance past the aperture).
                     const imgYs = ledData.map(d => d.imagePoint && d.imagePoint[1]).filter(y => y != null && Number.isFinite(y));
-                    const maxImgY = imgYs.length
-                        ? Math.max(p.vy2 + 20, ...imgYs) + p.dsep * 0.75
-                        : p.vy2 + p.dsep * 0.5;
+                    const apexY = imgYs.length ? Math.max(p.vy2 + 20, ...imgYs) : p.vy2 + 20;
+                    const maxImgY = apexY + p.dsep * 0.85;
                     const margin = Math.max(20, p.D * 0.1);
                     const yMax = maxImgY + margin;
                     const yMin = p.vy1 - margin;
@@ -1610,19 +1619,26 @@
                                 const [vx, vy] = result.exitDir;
                                 pts.push([ex, ey]);
 
+                                // Distance to the convergence point along this ray (if any)
+                                let tImg = null;
                                 if (imagePoint) {
                                     const [ix, iy] = imagePoint;
-                                    // t to reach the convergence point along this ray
-                                    const tImg = Math.abs(vy) >= Math.abs(vx)
+                                    const t = Math.abs(vy) >= Math.abs(vx)
                                         ? (iy - ey) / vy
                                         : (ix - ex) / vx;
-                                    if (tImg > 0) {
-                                        const imgPt = [ex + tImg * vx, ey + tImg * vy];
-                                        pts.push(imgPt);
-                                        // Diverging tail past focus — shows viewing-angle cone
-                                        const tFar = tImg + p.dsep * 0.65;
-                                        divergeTail = [imgPt, [ex + tFar * vx, ey + tFar * vy]];
-                                    }
+                                    if (t > 0 && t < p.dsep * 2) tImg = t;
+                                }
+
+                                if (tImg !== null) {
+                                    // Two-segment: converging to focus, then faded diverging tail
+                                    const imgPt = [ex + tImg * vx, ey + tImg * vy];
+                                    pts.push(imgPt);
+                                    const tFar = tImg + p.dsep * 0.65;
+                                    divergeTail = [imgPt, [ex + tFar * vx, ey + tFar * vy]];
+                                } else {
+                                    // No usable focus — fan the ray at full opacity past the aperture
+                                    const tFar = p.dsep * 0.65;
+                                    pts.push([ex + tFar * vx, ey + tFar * vy]);
                                 }
                             }
 
