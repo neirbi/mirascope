@@ -1,0 +1,1707 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="referrer" content="no-referrer">
+<meta name="author" content="Elijah">
+<meta name="date" content="2026-05-04">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Optimal Mirascope Geometry — Ray Trace Simulator &amp; Research">
+<meta property="og:description" content="Self-validating ray trace simulator for mirascope optical geometry optimization. Research into whether the parabolic mirror shape is optimal for maximizing viewing angle.">
+<meta name="description" content="Self-validating ray trace simulator for mirascope optical geometry optimization. Research into whether the parabolic mirror shape is optimal for maximizing viewing angle. Published May 4, 2026.">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Optimal Mirascope Geometry — Ray Trace Simulator & Research</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #111;
+  --card: #161616;
+  --border: #2a2a2a;
+  --border-dim: #222;
+  --text: #ccc;
+  --text-dim: #999;
+  --text-muted: #666;
+  --accent: #a83232;
+  --accent-light: #d44;
+  --pass: #40f040;
+  --fail: #f04040;
+  --warn: #f0a040;
+  --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  --sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --radius: 0.5rem;
+  --space-xs: clamp(0.25rem, 1vw, 0.5rem);
+  --space-sm: clamp(0.5rem, 2vw, 0.75rem);
+  --space-md: clamp(0.75rem, 3vw, 1.5rem);
+  --space-lg: clamp(1rem, 4vw, 2rem);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: var(--sans);
+  color: var(--text);
+  padding: 0 var(--space-sm);
+}
+
+.thesis {
+  max-width: 50rem;
+  width: 100%;
+  margin: var(--space-lg) 0 var(--space-md);
+  padding: clamp(1rem, 3vw, 1.5rem) clamp(1rem, 4vw, 1.5rem);
+  background: var(--card);
+  border: none;
+  border-left: 4px solid var(--accent);
+  border-radius: 0;
+  font-family: var(--sans);
+  font-size: clamp(1rem, 2.5vw, 1.125rem);
+  line-height: 1.75;
+  color: #bbb;
+  font-weight: 400;
+}
+
+.thesis h2 {
+  font-family: var(--sans);
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--accent-light);
+  margin: 0 0 var(--space-md) 0;
+  line-height: 1.2;
+}
+
+.principles {
+  display: flex;
+  gap: 2px;
+  margin-bottom: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.principle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: clamp(0.85rem, 2vw, 0.95rem);
+  background: var(--bg);
+  padding: 0.5rem 0.75rem;
+  font-family: var(--mono);
+  color: var(--text-dim);
+}
+
+.principle svg { flex-shrink: 0; }
+.principle strong { font-weight: 600; color: var(--accent); }
+
+.thesis p {
+  margin: 0 0 clamp(0.6rem, 2vw, 0.9rem) 0;
+}
+
+.thesis p:last-child { margin-bottom: 0; }
+
+canvas {
+  border: none;
+  border-radius: 0;
+  margin-top: 2px;
+  max-width: 100%;
+  height: auto;
+}
+
+.controls {
+  margin: 2px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(clamp(6rem, 14vw, 8rem), 1fr));
+  gap: 2px;
+  width: 100%;
+  max-width: 50rem;
+}
+
+.ctrl {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  font-size: clamp(0.65rem, 1.8vw, 0.75rem);
+  font-weight: 500;
+  background: var(--card);
+  padding: 0.5rem 0.75rem;
+}
+
+.ctrl label {
+  font-family: var(--sans);
+  color: var(--text-dim);
+}
+
+.ctrl input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.val { color: var(--accent-light); font-weight: 700; font-family: var(--mono); }
+
+#validator {
+  margin: var(--space-xs) 0 var(--space-md);
+  padding: 0;
+  background: transparent;
+  max-width: 50rem;
+  width: 100%;
+  font-family: var(--mono);
+  line-height: 1;
+}
+
+.verdict {
+  padding: clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem);
+  margin-bottom: 2px;
+  font-family: var(--sans);
+  font-size: clamp(0.8rem, 2.2vw, 1rem);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.verdict--pass { background: #0a1a0a; border-left: 4px solid var(--pass); color: var(--pass); }
+.verdict--warn { background: #1a1500; border-left: 4px solid var(--warn); color: var(--warn); }
+.verdict--fail { background: #1a0a0a; border-left: 4px solid var(--fail); color: var(--fail); }
+
+.pass { color: var(--pass); }
+.fail { color: var(--fail); }
+.warn { color: var(--warn); }
+.dim { color: var(--text-muted); }
+
+.check-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.75rem;
+  padding: 0.45rem clamp(0.75rem, 2vw, 1rem);
+  background: var(--card);
+  margin-bottom: 1px;
+  align-items: center;
+  font-size: clamp(0.65rem, 1.6vw, 0.75rem);
+}
+
+.check-label {
+  color: var(--text-dim);
+  font-family: var(--sans);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.check-expected {
+  color: var(--text-muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.check-val {
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+  min-width: 5rem;
+}
+
+.check-summary {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  padding: 0.5rem clamp(0.75rem, 2vw, 1rem);
+  font-family: var(--sans);
+  font-size: clamp(0.65rem, 1.6vw, 0.75rem);
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--card);
+  margin-top: 1px;
+}
+
+.caption {
+  max-width: 50rem;
+  width: 100%;
+  text-align: left;
+  font-size: clamp(0.7rem, 1.8vw, 0.8rem);
+  font-family: var(--mono);
+  color: var(--text-muted);
+  padding: 0.75rem;
+  line-height: 1.6;
+  background: var(--card);
+  border-left: 4px solid var(--border-dim);
+  margin-top: 2px;
+  margin-bottom: var(--space-lg);
+}
+
+.caption a {
+  color: var(--text-dim);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.caption a:hover { color: var(--accent-light); }
+
+@media (max-width: 600px) {
+  .principles { flex-direction: column; }
+  .check-row { font-size: 0.6rem; }
+  .controls { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="thesis">
+  <h2>The parabola is not the optimal mirror shape for maximizing mirascope viewing angle.</h2>
+  <div class="principles">
+    <div class="principle">
+      <svg width="24" height="24" viewBox="0 0 28 28"><line x1="4" y1="14" x2="24" y2="14" stroke="#d44" stroke-width="2.5" stroke-linecap="round"/><circle cx="24" cy="14" r="3" fill="none" stroke="#d44" stroke-width="1.5"/></svg>
+      <span><strong style="color:var(--accent)">Principle 1</strong> — Light travels in straight lines.</span>
+    </div>
+    <div class="principle">
+      <svg width="24" height="24" viewBox="0 0 28 28"><line x1="4" y1="22" x2="14" y2="6" stroke="#d44" stroke-width="2" stroke-linecap="round"/><line x1="14" y1="6" x2="24" y2="22" stroke="#d44" stroke-width="2" stroke-linecap="round"/><line x1="14" y1="6" x2="14" y2="26" stroke="#555" stroke-width="1" stroke-dasharray="2,2"/></svg>
+      <span><strong style="color:var(--accent)">Principle 2</strong> — Angle in equals angle out.</span>
+    </div>
+  </div>
+  <p>In 1969, a custodial worker at UC Santa Barbara was cleaning a storage closet filled with old military searchlight mirrors when he saw something strange — dust that seemed to float in the air and couldn't be wiped away. A physicist identified it as a real image, an optical effect where light comes together so precisely that it makes something appear to be there even when it's not. This accidental discovery led to the creation of the mirascope, and the parabolic shape of those surplus mirrors has been the basis for every version made since then.</p>
+  <p>Over the next few decades, researchers found that parabolas have a special mathematical property: any light ray coming from the focal point bounces off perfectly parallel to the axis, and the other way around. This property is exact and makes the mirascope's image very sharp. However, a small assumption was overlooked. Since the parabola creates a perfect focus, it was considered the best mirror shape for the device. Nobody made a distinction between making the focus as precise as possible and making the experience better for the viewer. These are actually two different problems. Every parabolic mirascope built has a viewing angle of about 55 degrees from horizontal. This angle is a result of the parabolic shape, not a fundamental law of optics.</p>
+  <p>This project starts with a basic idea: the only physical rules that apply to the mirascope are that light moves in straight lines and bounces back at the same angles. The parabolic shape and the need for rays to travel parallel between the mirrors, as well as the 55-degree viewing limit, are all results of one specific geometric solution, not limits set by physics. A different mirror shape could send light along completely different paths and still bring the rays together at the image point, even if no human designer would think of drawing those paths. Such a shape might be able to trade some of the parabola's perfect focus for a wider viewing area, especially when the object is small and gives off its own light, and a slightly blurry image would be okay if it means being able to see it from more angles.</p>
+  <p>The tools needed to search for a shape like this, such as evolutionary algorithms that can explore millions of freeform surface geometries, exact ray-tracing engines that can evaluate each one, and multi-objective scoring that balances image quality with viewing angle and brightness, did not exist when the mirascope was first discovered. They were also not available for practical use when it was last studied in 2007. However, these tools are available now. This project plans to use them, starting with the two basic laws of reflection and making no assumptions about the mirror shape, to explore a question that has never been asked before: is the parabola really the best shape for a mirascope, or was it just the shape that was readily available?</p>
+</div>
+
+<div style="max-width:50rem;width:100%;margin:2px 0;font-family:'SF Mono','Fira Code',Consolas,monospace;font-size:0.75rem;line-height:1;background:transparent;">
+
+  <!-- MATH HEADER -->
+  <div style="background:#0d0d0d;border-left:4px solid #a83232;padding:0.75rem 1rem;margin-bottom:1px;">
+    <span style="color:#d44;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Simulator Math</span>
+    <span style="color:#444;margin-left:1rem;">three functions · all geometry derives from these</span>
+  </div>
+
+  <!-- FORMULA 1 -->
+  <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:1.5rem 1fr;gap:0.4rem 0.75rem;align-items:start;">
+    <span style="color:#d44;font-weight:700;">①</span>
+    <span style="color:#999;font-weight:700;">Surface Normal of a Parabola</span>
+    <span></span>
+    <span style="color:#666;">Mirror surface: <span style="color:#ccc;">y = x² / (4f)</span></span>
+    <span></span>
+    <span style="color:#666;">Slope at x: <span style="color:#ccc;">dy/dx = x / (2f)</span></span>
+    <span></span>
+    <span style="color:#666;">Normal vector: <span style="color:#ccc;">n = ( −x/2f , 1 )</span> normalized to unit length</span>
+    <span></span>
+    <span style="color:#555;font-style:italic;">Top mirror (M2) flips y-component sign to −1</span>
+  </div>
+
+  <!-- FORMULA 2 -->
+  <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:1.5rem 1fr;gap:0.4rem 0.75rem;align-items:start;">
+    <span style="color:#d44;font-weight:700;">②</span>
+    <span style="color:#999;font-weight:700;">Reflection Formula</span>
+    <span></span>
+    <span style="color:#ccc;">r = d − 2(d·n)n</span>
+    <span></span>
+    <span style="color:#666;">d = incoming ray direction &nbsp;·&nbsp; n = surface normal &nbsp;·&nbsp; r = reflected ray direction</span>
+    <span></span>
+    <span style="color:#555;font-style:italic;">Standard specular reflection. Confirmed: Wikipedia / optics literature.</span>
+  </div>
+
+  <!-- FORMULA 3 -->
+  <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:1.5rem 1fr;gap:0.4rem 0.75rem;align-items:start;">
+    <span style="color:#d44;font-weight:700;">③</span>
+    <span style="color:#999;font-weight:700;">Ray–Parabola Intersection</span>
+    <span></span>
+    <span style="color:#666;">Ray: <span style="color:#ccc;">x(t) = ox + t·dx &nbsp;&nbsp; y(t) = oy + t·dy</span></span>
+    <span></span>
+    <span style="color:#666;">Substitute into parabola equation → quadratic in t → two solutions</span>
+    <span></span>
+    <span style="color:#666;">Selection: <span style="color:#ccc;">smallest positive t</span> (nearest intersection)</span>
+    <span></span>
+    <span style="color:#f0a040;font-style:italic;">⚠ Open question: is smallest t always the correct root for a concave mirror? Needs expert review.</span>
+  </div>
+
+</div>
+
+
+<canvas id="c" width="800" height="600"></canvas>
+
+<div class="controls">
+  <div class="ctrl">
+    <label>f₁ (bottom): <span class="val" id="vf">80</span> mm</label>
+    <input type="range" id="sf" min="40" max="160" value="80">
+  </div>
+  <div class="ctrl">
+    <label>f₂ (top): <span class="val" id="vf2">80</span> mm</label>
+    <input type="range" id="sf2" min="40" max="160" value="80">
+  </div>
+  <div class="ctrl">
+    <label>d_sep: <span class="val" id="vd">80</span> mm</label>
+    <input type="range" id="sd" min="40" max="200" value="80">
+  </div>
+  <div class="ctrl">
+    <label>h_obj: <span class="val" id="vh">0</span> mm</label>
+    <input type="range" id="sh" min="0" max="75" value="0" step="1">
+  </div>
+  <div class="ctrl">
+    <label>Aperture: <span class="val" id="va">60</span> mm</label>
+    <input type="range" id="sa" min="10" max="150" value="60">
+  </div>
+  <div class="ctrl">
+    <label>Rays: <span class="val" id="vr">12</span></label>
+    <input type="range" id="sr" min="3" max="30" value="12">
+  </div>
+  <div class="ctrl">
+    <label>Obj% of f₁: <span class="val" id="vop">5</span>%</label>
+    <input type="range" id="sop" min="1" max="20" value="5" step="1">
+  </div>
+</div>
+
+<div id="validator"></div>
+
+<div id="optimizer-ui" style="max-width:50rem;width:100%;margin:2px 0;">
+  <button id="opt-btn" onclick="runOptimizer()" style="
+    width:100%;padding:0.85rem 1rem;
+    background:#1a0a0a;border:none;border-left:4px solid #d44;
+    color:#d44;font-family:'SF Mono','Fira Code',Consolas,monospace;
+    font-size:0.85rem;font-weight:700;letter-spacing:0.08em;
+    text-transform:uppercase;cursor:pointer;text-align:left;
+    transition:background 0.15s;">
+    ▶ FIND OPTIMAL MIRROR GEOMETRY — exhaustive search over f₁/d, f₂/d ratios
+  </button>
+  <div id="opt-result" style="display:none;background:#0a0a0a;border-left:4px solid #40f040;
+    padding:0.85rem 1rem;font-family:'SF Mono','Fira Code',Consolas,monospace;
+    font-size:0.8rem;color:#ccc;line-height:1.8;margin-top:2px;">
+  </div>
+  <div id="opt-progress" style="display:none;background:#161616;border-left:4px solid #666;
+    padding:0.6rem 1rem;font-family:'SF Mono','Fira Code',Consolas,monospace;
+    font-size:0.75rem;color:#666;margin-top:2px;">
+    searching...
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const SCALE = 2;
+const CX = canvas.width / 2;
+const CY = canvas.height * 0.6;
+
+function toScreen(x, y) { return [CX + x * SCALE, CY - y * SCALE]; }
+function parabolaY(x, f, vy, s) { return s * (x * x) / (4 * f) + vy; }
+
+function drawParabola(f, vy, s, halfW, color, isUpper, aperture) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  const steps = 200;
+  const apHalf = aperture / 2;
+  let drawing = false;
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const x = -halfW + (2 * halfW * i / steps);
+    if (isUpper && Math.abs(x) < apHalf) { drawing = false; continue; }
+    const y = parabolaY(x, f, vy, s);
+    const [sx, sy] = toScreen(x, y);
+    if (!drawing) { ctx.moveTo(sx, sy); drawing = true; }
+    else ctx.lineTo(sx, sy);
+  }
+  ctx.stroke();
+}
+
+function normal(x, f, s) {
+  const nx = -x / (2 * f);
+  const ny = s;
+  const len = Math.sqrt(nx * nx + ny * ny);
+  return [nx / len, ny / len];
+}
+
+function reflectVec(dx, dy, nx, ny) {
+  const dot = dx * nx + dy * ny;
+  return [dx - 2 * dot * nx, dy - 2 * dot * ny];
+}
+
+function rayParabola(ox, oy, dx, dy, f, vy, s) {
+  const u = ox;
+  const v = oy - vy;
+  const ff = 4 * f;
+  const A = s * dx * dx / ff;
+  const B = 2 * s * u * dx / ff - dy;
+  const C = s * u * u / ff - v;
+
+  if (Math.abs(A) < 1e-12) {
+    if (Math.abs(B) < 1e-12) return null;
+    const t = -C / B;
+    return t > 0.001 ? t : null;
+  }
+  const disc = B * B - 4 * A * C;
+  if (disc < 0) return null;
+  const sqrtD = Math.sqrt(disc);
+  const t1 = (-B - sqrtD) / (2 * A);
+  const t2 = (-B + sqrtD) / (2 * A);
+  let t = null;
+  if (t1 > 0.001) t = t1;
+  if (t2 > 0.001 && (t === null || t2 < t)) t = t2;
+  return t;
+}
+
+// Check where a ray from (ox,oy) direction (dx,dy) crosses a horizontal line at y=lineY
+// Returns x at crossing, or null if ray doesn't reach it
+function rayCrossesY(ox, oy, dx, dy, lineY) {
+  if (Math.abs(dy) < 1e-12) return null; // horizontal ray
+  const t = (lineY - oy) / dy;
+  if (t < 0.001) return null; // behind ray
+  return ox + t * dx;
+}
+
+function draw() {
+  const f = parseFloat(document.getElementById('sf').value);   // f1 — bottom mirror
+  const f2 = parseFloat(document.getElementById('sf2').value); // f2 — top mirror
+  const d_sep = parseFloat(document.getElementById('sd').value);
+  const h_obj = parseFloat(document.getElementById('sh').value);
+  const aperture = parseFloat(document.getElementById('sa').value);
+  const numRays = parseInt(document.getElementById('sr').value);
+
+  document.getElementById('vf').textContent = f;
+  document.getElementById('vf2').textContent = f2;
+  document.getElementById('vd').textContent = d_sep;
+  document.getElementById('vh').textContent = h_obj;
+  document.getElementById('va').textContent = aperture;
+  document.getElementById('vr').textContent = numRays;
+
+  const vy1 = -d_sep / 2;
+  const vy2 = d_sep / 2;
+  // Rim: where M1 and M2 intersect
+  // M1: y = x²/(4f) + vy1,  M2: y = -x²/(4f2) + vy2
+  // x²/(4f) + vy1 = -x²/(4f2) + vy2
+  // x²(1/(4f) + 1/(4f2)) = d_sep
+  // x² = 4·f·f2·d_sep / (f + f2)
+  const rimSq = 4 * f * f2 * d_sep / (f + f2);
+  if (rimSq <= 0) return;
+  const halfW = Math.sqrt(rimSq);
+  const D = 2 * halfW;
+  const apHalf = aperture / 2;
+
+  const isCanonical = Math.abs(d_sep - f) < 0.5 && Math.abs(f - f2) < 0.5;
+  const objBeyondFocus = h_obj >= f;
+  const divergent = d_sep >= 2 * Math.min(f, f2); // conservative
+
+  // Formula predictions
+  let formula_h_img = null, formula_mag = null, formula_imgY = null;
+  if (isCanonical && !objBeyondFocus && h_obj > 0) {
+    formula_h_img = f * h_obj / (f - h_obj);
+    formula_mag = f / (f - h_obj);
+    formula_imgY = vy2 + formula_h_img;
+  } else if (isCanonical && h_obj === 0) {
+    formula_h_img = 0;
+    formula_mag = 1;
+    formula_imgY = vy2;
+  }
+
+  const formula_theta_min = Math.atan2(aperture / 2, d_sep) * 180 / Math.PI;
+  const formula_theta_max = Math.atan2(D / 2, d_sep) * 180 / Math.PI;
+  const formula_depth = D * D / (16 * f);
+  const formula_f_canonical = D / (2 * Math.sqrt(2));
+  const formula_d_check = d_sep / 2;
+
+  // ========== DRAW ==========
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const mirrorColor = (objBeyondFocus || divergent) ? '#444' : '#777';
+  drawParabola(f, vy1, +1, halfW, mirrorColor, false, 0);
+  drawParabola(f2, vy2, -1, halfW, mirrorColor, true, aperture);
+
+  // Aperture markers
+  const apEdgeY = parabolaY(apHalf, f2, vy2, -1);
+  const [ax1, ay1] = toScreen(-apHalf, apEdgeY);
+  const [ax2, ay2] = toScreen(apHalf, apEdgeY);
+  ctx.strokeStyle = '#c08030';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(ax1, ay1); ctx.lineTo(ax1, ay1 - 12);
+  ctx.moveTo(ax2, ay2); ctx.lineTo(ax2, ay2 - 12);
+  ctx.stroke();
+
+  // Object
+  const objX = 0;
+  const objY = vy1 + h_obj;
+  const [osx, osy] = toScreen(objX, objY);
+  ctx.fillStyle = '#f04040';
+  ctx.fillRect(osx - 4, osy - 4, 8, 8);
+  ctx.font = '10px monospace';
+  ctx.fillText('OBJ', osx + 8, osy + 3);
+
+  // Focal points
+  const [fx1s, fy1s] = toScreen(0, vy1 + f);   // M1 focus
+  const [fx2s, fy2s] = toScreen(0, vy2 - f2);  // M2 focus
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(fx1s - 4, fy1s); ctx.lineTo(fx1s + 4, fy1s);
+  ctx.moveTo(fx1s, fy1s - 4); ctx.lineTo(fx1s, fy1s + 4);
+  ctx.moveTo(fx2s - 4, fy2s); ctx.lineTo(fx2s + 4, fy2s);
+  ctx.moveTo(fx2s, fy2s - 4); ctx.lineTo(fx2s, fy2s + 4);
+  ctx.stroke();
+  ctx.fillStyle = '#555';
+  ctx.font = '9px monospace';
+  ctx.fillText('f₁', fx1s + 6, fy1s + 3);
+  ctx.fillText('f₂', fx2s + 6, fy2s + 3);
+
+  // Axis
+  ctx.strokeStyle = '#222';
+  ctx.lineWidth = 0.5;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(CX, 0); ctx.lineTo(CX, canvas.height); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ========== RAY TRACE ==========
+  const convergencePoints = [];
+  const postM2angles = [];
+  const exitAngles = []; // angle from horizontal of each exiting ray
+  let raysAttempted = 0;
+  let raysCompleted = 0;  // hit M2, hit M1, exited aperture
+  let raysTrapped = 0;     // completed reflections but blocked by M2/aperture
+
+  for (let i = 0; i < numRays; i++) {
+    const frac = (i + 0.5) / numRays;
+    const angle = -70 + 140 * frac;
+    const theta = angle * Math.PI / 180;
+    const dx = Math.sin(theta);
+    const dy = Math.cos(theta);
+    raysAttempted++;
+
+    // Step 1: Object -> M2
+    const t2 = rayParabola(objX, objY, dx, dy, f2, vy2, -1);
+    if (t2 === null) continue;
+    const hitX2 = objX + t2 * dx;
+    const hitY2 = objY + t2 * dy;
+
+    // Check bounds: must hit within mirror rim
+    if (Math.abs(hitX2) > halfW) continue;
+
+    // Check: does ray go through aperture instead of hitting mirror?
+    if (Math.abs(hitX2) < apHalf) {
+      // Ray escapes through aperture without hitting M2 — lost upward
+      // Draw as dim dead ray
+      const [sx1, sy1] = toScreen(objX, objY);
+      const escapeY = vy2 + 30; // just above aperture
+      const [sx2, sy2] = toScreen(hitX2, escapeY);
+      ctx.strokeStyle = 'rgba(100,100,100,0.2)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(sx1, sy1); ctx.lineTo(sx2, sy2); ctx.stroke();
+      continue;
+    }
+
+    // Draw: Object -> M2 (yellow)
+    const [s1x, s1y] = toScreen(objX, objY);
+    const [s2x, s2y] = toScreen(hitX2, hitY2);
+    ctx.strokeStyle = 'rgba(255,255,0,0.45)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(s1x, s1y); ctx.lineTo(s2x, s2y); ctx.stroke();
+
+    // Step 2: Reflect off M2
+    const [n2x, n2y] = normal(hitX2, f2, -1);
+    const [rx2, ry2] = reflectVec(dx, dy, n2x, n2y);
+
+    const postAngle = Math.atan2(Math.abs(rx2), Math.abs(ry2)) * 180 / Math.PI;
+    postM2angles.push(postAngle);
+
+    // Step 3: M2 -> M1
+    const t1 = rayParabola(hitX2, hitY2, rx2, ry2, f, vy1, +1);
+    if (t1 === null) continue;
+    const hitX1 = hitX2 + t1 * rx2;
+    const hitY1 = hitY2 + t1 * ry2;
+
+    // Check: hit must be within M1 rim
+    if (Math.abs(hitX1) > halfW) continue;
+
+    // Check: hit point must be on the concave (upper) surface of M1
+    // i.e. hitY1 should be >= vy1 (above vertex)
+    const expectedY1 = parabolaY(hitX1, f, vy1, +1);
+    if (Math.abs(hitY1 - expectedY1) > 0.5) continue; // didn't actually land on M1
+
+    // Draw: M2 -> M1
+    const [s3x, s3y] = toScreen(hitX1, hitY1);
+    ctx.strokeStyle = 'rgba(255,255,0,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(s2x, s2y); ctx.lineTo(s3x, s3y); ctx.stroke();
+
+    // Step 4: Reflect off M1
+    const [n1x, n1y] = normal(hitX1, f, +1);
+    const [rx1, ry1] = reflectVec(rx2, ry2, n1x, n1y);
+
+    // Step 5: Does the outgoing ray exit through the aperture?
+    // The ray starts at (hitX1, hitY1) going direction (rx1, ry1).
+    // It must cross the aperture plane (y ≈ vy2) with |x| < apHalf.
+    // BUT it must also not hit M2 first (if it's heading toward a mirror region).
+
+    // First check: does it hit M2 mirror surface before exiting?
+    const t2again = rayParabola(hitX1, hitY1, rx1, ry1, f2, vy2, -1);
+    let hitsM2again = false;
+    if (t2again !== null) {
+      const rehitX = hitX1 + t2again * rx1;
+      // If this hit point is outside the aperture, the ray hits mirror, not aperture
+      if (Math.abs(rehitX) >= apHalf && Math.abs(rehitX) <= halfW) {
+        hitsM2again = true;
+      }
+    }
+
+    // Find where ray crosses aperture plane (y = apEdgeY approximately, use vy2 for simplicity)
+    const crossX = rayCrossesY(hitX1, hitY1, rx1, ry1, vy2);
+    const exitsAperture = crossX !== null && Math.abs(crossX) < apHalf && !hitsM2again;
+
+    if (exitsAperture) {
+      // Ray exits! Draw outgoing ray from M1 to a point above aperture, then extending out
+      raysCompleted++;
+
+      // Record exit angle from horizontal
+      // rx1, ry1 is the outgoing direction. Angle from horizontal = atan2(ry1, |rx1|)
+      // But we want the angle a viewer would be at — measured from horizontal at the aperture
+      // The ray exits at (crossX, vy2) going direction (rx1, ry1)
+      // A viewer looking back along this ray is at angle atan2(ry1, -rx1) from horizontal if rx1<0,
+      // or atan2(ry1, rx1) if rx1>0. We want absolute angle from horizontal.
+      const exitAngleDeg = Math.atan2(Math.abs(ry1), Math.abs(rx1)) * 180 / Math.PI;
+      exitAngles.push(exitAngleDeg);
+
+      // Draw from M1 hit to where it crosses aperture plane
+      const [s4x, s4y] = toScreen(hitX1, hitY1);
+      const [s5x, s5y] = toScreen(crossX, vy2);
+      ctx.strokeStyle = 'rgba(255,255,0,0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(s4x, s4y); ctx.lineTo(s5x, s5y); ctx.stroke();
+
+      // Continue ray above aperture (visible to viewer)
+      const ext = 150;
+      const exitEndX = crossX + ext * rx1;
+      const exitEndY = vy2 + ext * ry1;
+      const [s6x, s6y] = toScreen(crossX, vy2);
+      const [s7x, s7y] = toScreen(exitEndX, exitEndY);
+      ctx.strokeStyle = 'rgba(255,200,0,0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(s6x, s6y); ctx.lineTo(s7x, s7y); ctx.stroke();
+
+      // Convergence: where does outgoing ray cross x=0 ABOVE aperture?
+      if (Math.abs(rx1) > 1e-6) {
+        const tAxis = -hitX1 / rx1;
+        if (tAxis > 0) {
+          const convergY = hitY1 + tAxis * ry1;
+          // Only count convergence above or near the aperture
+          if (convergY >= vy2 - 5) {
+            convergencePoints.push(convergY);
+            const [cx, cy] = toScreen(0, convergY);
+            ctx.fillStyle = 'rgba(0,255,100,0.6)';
+            ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+      }
+    } else {
+      // Ray is TRAPPED — hits M2 back or misses aperture
+      raysTrapped++;
+
+      // Draw the trapped segment dimly from M1 to wherever it ends up
+      const [s4x, s4y] = toScreen(hitX1, hitY1);
+      if (hitsM2again && t2again !== null) {
+        const rehitX = hitX1 + t2again * rx1;
+        const rehitY = hitY1 + t2again * ry1;
+        const [s5x, s5y] = toScreen(rehitX, rehitY);
+        ctx.strokeStyle = 'rgba(255,50,50,0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(s4x, s4y); ctx.lineTo(s5x, s5y); ctx.stroke();
+        // Small red dot where it hits M2 back
+        ctx.fillStyle = 'rgba(255,50,50,0.4)';
+        ctx.beginPath(); ctx.arc(s5x, s5y, 2, 0, Math.PI * 2); ctx.fill();
+      } else if (crossX !== null) {
+        // Crosses aperture plane but outside aperture
+        const [s5x, s5y] = toScreen(crossX, vy2);
+        ctx.strokeStyle = 'rgba(255,50,50,0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(s4x, s4y); ctx.lineTo(s5x, s5y); ctx.stroke();
+      }
+    }
+  }
+
+  // ========== IMAGE MARKERS ==========
+  let ray_imgY = null, ray_spread = 0;
+  if (convergencePoints.length > 1) {
+    const minC = Math.min(...convergencePoints);
+    const maxC = Math.max(...convergencePoints);
+    ray_spread = maxC - minC;
+    ray_imgY = convergencePoints.reduce((a, b) => a + b, 0) / convergencePoints.length;
+  } else if (convergencePoints.length === 1) {
+    ray_imgY = convergencePoints[0];
+  }
+
+  // Ray-traced image marker (green/yellow/red based on spread)
+  if (ray_imgY !== null && !objBeyondFocus && !divergent) {
+    const [ix, iy] = toScreen(0, ray_imgY);
+    if (iy > 5 && iy < canvas.height - 5) {
+      const r = Math.max(6, Math.min(40, ray_spread * SCALE));
+      ctx.strokeStyle = ray_spread < 1 ? '#0f0' : ray_spread < 5 ? '#ff0' : '#f00';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(ix, iy, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#0f0';
+      ctx.font = '9px monospace';
+      ctx.fillText('RAY', ix + r + 4, iy - 2);
+    }
+  }
+
+  // Formula prediction marker (blue dashed)
+  if (formula_imgY !== null) {
+    const [fix, fiy] = toScreen(0, formula_imgY);
+    if (fiy > 5 && fiy < canvas.height - 5) {
+      ctx.strokeStyle = 'rgba(100,150,255,0.6)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.arc(fix, fiy, 12, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(100,150,255,0.7)';
+      ctx.font = '9px monospace';
+      ctx.fillText('FORMULA', fix + 16, fiy + 3);
+    }
+  }
+
+  // ========== VIEWING CONE ==========
+  // Draw cone lines from the image point (or aperture center) showing min/max viewing angles
+  // These are the angles from horizontal that a viewer's eye must be within
+  const coneOriginY = ray_imgY !== null ? ray_imgY : vy2;
+  const [coX, coY] = toScreen(0, coneOriginY);
+  
+  if (exitAngles.length >= 2 && coY > 5 && coY < canvas.height - 5) {
+    const ray_theta_min = Math.min(...exitAngles);
+    const ray_theta_max = Math.max(...exitAngles);
+    const coneLen = 120; // px length of cone lines
+
+    // Draw cone edges — these show where the shallowest and steepest viewer can be
+    // θ is from horizontal, so line goes: dx = cos(θ), dy = sin(θ) upward-right
+    // Draw both sides (left and right of aperture)
+    for (const side of [-1, 1]) {
+      // Min angle line (shallowest viewer)
+      const minRad = ray_theta_min * Math.PI / 180;
+      const minEndX = coX + side * coneLen * Math.cos(minRad);
+      const minEndY = coY - coneLen * Math.sin(minRad);
+      ctx.strokeStyle = 'rgba(0,200,255,0.3)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(coX, coY); ctx.lineTo(minEndX, minEndY); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Max angle line (steepest viewer)
+      const maxRad = ray_theta_max * Math.PI / 180;
+      const maxEndX = coX + side * coneLen * Math.cos(maxRad);
+      const maxEndY = coY - coneLen * Math.sin(maxRad);
+      ctx.strokeStyle = 'rgba(0,200,255,0.3)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(coX, coY); ctx.lineTo(maxEndX, maxEndY); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Fill the cone region lightly
+      ctx.fillStyle = 'rgba(0,200,255,0.04)';
+      ctx.beginPath();
+      ctx.moveTo(coX, coY);
+      ctx.lineTo(minEndX, minEndY);
+      ctx.lineTo(maxEndX, maxEndY);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Label angles on the right side
+    const labelR = coneLen + 5;
+    const minLabelX = coX + labelR * Math.cos(ray_theta_min * Math.PI / 180);
+    const minLabelY = coY - labelR * Math.sin(ray_theta_min * Math.PI / 180);
+    const maxLabelX = coX + labelR * Math.cos(ray_theta_max * Math.PI / 180);
+    const maxLabelY = coY - labelR * Math.sin(ray_theta_max * Math.PI / 180);
+
+    ctx.fillStyle = 'rgba(0,200,255,0.7)';
+    ctx.font = '10px monospace';
+    ctx.fillText(`${ray_theta_min.toFixed(1)}°`, minLabelX, minLabelY + 3);
+    ctx.fillText(`${ray_theta_max.toFixed(1)}°`, maxLabelX, maxLabelY + 3);
+
+    // Cone width label — centered between the two lines
+    const midAngle = (ray_theta_min + ray_theta_max) / 2;
+    const midRad = midAngle * Math.PI / 180;
+    const midR = coneLen * 0.6;
+    const midX = coX + midR * Math.cos(midRad);
+    const midY = coY - midR * Math.sin(midRad);
+    const coneWidth = ray_theta_max - ray_theta_min;
+    ctx.fillStyle = 'rgba(0,255,200,0.9)';
+    ctx.font = 'bold 12px monospace';
+    ctx.fillText(`${coneWidth.toFixed(1)}°`, midX - 10, midY + 4);
+  }
+
+  // Warnings
+  if (objBeyondFocus) {
+    ctx.fillStyle = 'rgba(240,60,60,0.9)';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText('NO IMAGE — h_obj ≥ f', CX - 100, 25);
+  }
+  if (divergent) {
+    ctx.fillStyle = 'rgba(240,60,60,0.9)';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText('NO IMAGE — d_sep ≥ 2f', CX - 110, 25);
+  }
+
+  // Ray stats on canvas
+  ctx.fillStyle = '#666';
+  ctx.font = '10px monospace';
+  ctx.fillText(`rays: ${raysCompleted} exit / ${raysTrapped} trapped / ${raysAttempted} total`, 10, canvas.height - 10);
+
+  // ========== VALIDATOR ==========
+  // ALL checks run ALWAYS. No skipping. No hiding.
+  const checks = [];
+  let maxPostM2angle = postM2angles.length > 0 ? Math.max(...postM2angles) : 0;
+
+  // --- HARD CONSTRAINTS (if any fail, no image is possible) ---
+
+  checks.push({
+    label: 'h_obj < f₁',
+    expected: `< ${f}`,
+    got: `${h_obj}`,
+    unit: 'mm',
+    ok: !objBeyondFocus,
+    fatal: objBeyondFocus
+  });
+
+  checks.push({
+    label: 'd_sep < 2·min(f₁,f₂)',
+    expected: `< ${(2 * Math.min(f, f2))}`,
+    got: `${d_sep}`,
+    unit: 'mm',
+    ok: !divergent,
+    fatal: divergent
+  });
+
+  // --- CANONICAL CHECK (is this even a standard mirascope?) ---
+
+  const dSepOverF = d_sep / f;
+  const f1_equals_f2 = Math.abs(f - f2) < 0.5;
+  checks.push({
+    label: 'f₁ = f₂ (symmetric?)',
+    expected: f.toFixed(0),
+    got: f2.toFixed(0),
+    unit: 'mm',
+    ok: f1_equals_f2,
+    warn: Math.abs(f - f2) < 20
+  });
+
+  checks.push({
+    label: 'd_sep = f₁ (canonical?)',
+    expected: '1.000',
+    got: dSepOverF.toFixed(3),
+    unit: '',
+    ok: Math.abs(dSepOverF - 1) < 0.01,
+    warn: Math.abs(dSepOverF - 1) < 0.15
+  });
+
+  // --- GEOMETRY CROSS-CHECKS (always run) ---
+
+  const depthErr = Math.abs(formula_depth - formula_d_check);
+  checks.push({
+    label: 'd = d_sep/2',
+    expected: formula_d_check.toFixed(2),
+    got: formula_depth.toFixed(2),
+    unit: 'mm',
+    ok: depthErr < 0.5,
+    warn: depthErr < 2
+  });
+
+  const fErr = Math.abs(f - formula_f_canonical);
+  checks.push({
+    label: 'f = D/(2√2)',
+    expected: formula_f_canonical.toFixed(1),
+    got: f.toFixed(1),
+    unit: 'mm',
+    ok: fErr < 2,
+    warn: fErr < 10
+  });
+
+  const exp_tmax = Math.atan(Math.sqrt(2)) * 180 / Math.PI;
+  const tErr = Math.abs(formula_theta_max - exp_tmax);
+  checks.push({
+    label: 'θ_max = 54.74°',
+    expected: exp_tmax.toFixed(2),
+    got: formula_theta_max.toFixed(2),
+    unit: '°',
+    ok: tErr < 0.5,
+    warn: tErr < 3
+  });
+
+  // --- RAY BEHAVIOR (the truth from the trace) ---
+
+  // Post-M2 verticality — always report the actual angle
+  const expectedVert = (isCanonical && h_obj === 0) ? '~0' : '>0';
+  const vertOk = (isCanonical && h_obj === 0) ? maxPostM2angle < 0.01 : maxPostM2angle > 0;
+  checks.push({
+    label: 'Post-M2 angle from vertical',
+    expected: expectedVert,
+    got: maxPostM2angle.toFixed(2),
+    unit: '°',
+    ok: vertOk
+  });
+
+  // Aperture exit rate — THIS is the key reality check
+  const exitPct = raysAttempted > 0 ? (raysCompleted / raysAttempted * 100) : 0;
+  checks.push({
+    label: 'Rays exiting aperture',
+    expected: '>50%',
+    got: `${raysCompleted}/${raysAttempted} (${exitPct.toFixed(0)}%)`,
+    unit: '',
+    ok: exitPct > 50,
+    warn: exitPct > 20
+  });
+
+  // Trapped rays
+  checks.push({
+    label: 'Trapped rays',
+    expected: '0',
+    got: String(raysTrapped),
+    unit: '',
+    ok: raysTrapped === 0,
+    warn: raysTrapped <= 1
+  });
+
+  // --- VIEWING ANGLES (ray-traced vs formula) ---
+
+  const ray_theta_min = exitAngles.length >= 2 ? Math.min(...exitAngles) : null;
+  const ray_theta_max = exitAngles.length >= 2 ? Math.max(...exitAngles) : null;
+  const ray_cone_width = (ray_theta_min !== null && ray_theta_max !== null) ? ray_theta_max - ray_theta_min : null;
+
+  if (ray_theta_min !== null) {
+    const fMinErr = Math.abs(ray_theta_min - formula_theta_min);
+    checks.push({
+      label: 'θ_min (ray vs formula)',
+      expected: formula_theta_min.toFixed(1),
+      got: ray_theta_min.toFixed(1),
+      unit: '°',
+      ok: fMinErr < 5,
+      warn: fMinErr < 15
+    });
+  } else {
+    checks.push({
+      label: 'θ_min viewing angle',
+      expected: formula_theta_min.toFixed(1),
+      got: 'NO RAYS EXIT',
+      unit: '°',
+      ok: false
+    });
+  }
+
+  if (ray_theta_max !== null) {
+    const fMaxErr = Math.abs(ray_theta_max - formula_theta_max);
+    checks.push({
+      label: 'θ_max (ray vs formula)',
+      expected: formula_theta_max.toFixed(1),
+      got: ray_theta_max.toFixed(1),
+      unit: '°',
+      ok: fMaxErr < 5,
+      warn: fMaxErr < 15
+    });
+  } else {
+    checks.push({
+      label: 'θ_max viewing angle',
+      expected: formula_theta_max.toFixed(1),
+      got: 'NO RAYS EXIT',
+      unit: '°',
+      ok: false
+    });
+  }
+
+  if (ray_cone_width !== null) {
+    checks.push({
+      label: 'Viewing cone width',
+      expected: (formula_theta_max - formula_theta_min).toFixed(1),
+      got: ray_cone_width.toFixed(1),
+      unit: '°',
+      ok: Math.abs(ray_cone_width - (formula_theta_max - formula_theta_min)) < 10,
+      warn: ray_cone_width > 5
+    });
+  }
+
+  // Convergence spread — the real aberration measure
+  checks.push({
+    label: 'Convergence spread',
+    expected: '< 1',
+    got: convergencePoints.length > 1 ? ray_spread.toFixed(2) : (convergencePoints.length === 1 ? '0 (1 ray)' : 'N/A'),
+    unit: 'mm',
+    ok: convergencePoints.length >= 2 && ray_spread < 1,
+    warn: convergencePoints.length >= 2 && ray_spread < 5
+  });
+
+  // Image position: rays vs formula
+  if (formula_imgY !== null && ray_imgY !== null) {
+    const posErr = Math.abs(ray_imgY - formula_imgY);
+    checks.push({
+      label: 'Image Y: rays vs formula',
+      expected: formula_imgY.toFixed(2),
+      got: ray_imgY.toFixed(2),
+      unit: 'mm',
+      ok: posErr < 1,
+      warn: posErr < 5
+    });
+  } else if (formula_imgY !== null && ray_imgY === null) {
+    checks.push({
+      label: 'Image Y: rays vs formula',
+      expected: formula_imgY.toFixed(2),
+      got: 'NO RAYS CONVERGE',
+      unit: '',
+      ok: false
+    });
+  } else {
+    checks.push({
+      label: 'Image Y: rays vs formula',
+      expected: 'N/A (non-canonical)',
+      got: ray_imgY !== null ? ray_imgY.toFixed(2) + 'mm' : 'NO IMAGE',
+      unit: '',
+      ok: false,
+      warn: ray_imgY !== null
+    });
+  }
+
+  // h_img sanity — does the image height make physical sense?
+  if (h_obj > 0 && h_obj < f) {
+    const h_img = f * h_obj / (f - h_obj);
+    const sane = h_img < d_sep && h_img > 0;
+    checks.push({
+      label: 'h_img physically sane',
+      expected: `< ${d_sep.toFixed(0)}mm, > 0`,
+      got: h_img.toFixed(1),
+      unit: 'mm',
+      ok: sane,
+      warn: h_img < 2 * d_sep
+    });
+  } else if (h_obj === 0) {
+    checks.push({
+      label: 'h_img physically sane',
+      expected: '0 (at aperture)',
+      got: '0',
+      unit: 'mm',
+      ok: true
+    });
+  } else {
+    checks.push({
+      label: 'h_img physically sane',
+      expected: 'N/A',
+      got: 'h_obj ≥ f, no image',
+      unit: '',
+      ok: false
+    });
+  }
+
+  // Magnification
+  if (h_obj < f) {
+    const mag = f / (f - h_obj);
+    const magSane = mag > 0 && mag < 5;
+    checks.push({
+      label: 'Magnification',
+      expected: '1-3×',
+      got: mag.toFixed(3) + '×',
+      unit: '',
+      ok: magSane,
+      warn: mag < 10
+    });
+  } else {
+    checks.push({
+      label: 'Magnification',
+      expected: 'finite',
+      got: '∞ (h_obj ≥ f)',
+      unit: '',
+      ok: false
+    });
+  }
+
+  // Aperture vs diameter ratio
+  const adRatio = aperture / D;
+  checks.push({
+    label: 'A/D peep risk',
+    expected: '< 0.25',
+    got: adRatio.toFixed(3),
+    unit: '',
+    ok: adRatio < 0.25,
+    warn: adRatio < 0.5
+  });
+
+  // Aperture too big — bigger than mirror?
+  checks.push({
+    label: 'Aperture < diameter',
+    expected: `< ${D.toFixed(0)}`,
+    got: `${aperture}`,
+    unit: 'mm',
+    ok: aperture < D,
+    fatal: aperture >= D
+  });
+
+  // --- IMAGE LOCATION (is the image where a viewer can see it?) ---
+
+  // Where is the image relative to the aperture?
+  const imageAboveAperture = ray_imgY !== null && ray_imgY >= vy2 - 1;
+  const imageInsideCavity = ray_imgY !== null && ray_imgY < vy2 - 1;
+  const imageWayAbove = ray_imgY !== null && (ray_imgY - vy2) > d_sep;
+  const imageNearAperture = ray_imgY !== null && Math.abs(ray_imgY - vy2) < d_sep;
+
+  if (ray_imgY !== null) {
+    const imgRelative = ray_imgY - vy2;
+    let locStatus, locOk, locWarn;
+    if (imageInsideCavity) {
+      locStatus = `${imgRelative.toFixed(1)}mm (INSIDE CAVITY)`;
+      locOk = false;
+      locWarn = false;
+    } else if (imageWayAbove) {
+      locStatus = `${imgRelative.toFixed(1)}mm (TOO HIGH)`;
+      locOk = false;
+      locWarn = true;
+    } else {
+      locStatus = `${imgRelative.toFixed(1)}mm above aperture`;
+      locOk = true;
+      locWarn = false;
+    }
+    checks.push({
+      label: 'Image location vs aperture',
+      expected: '0 to ' + d_sep.toFixed(0) + 'mm above',
+      got: locStatus,
+      unit: '',
+      ok: locOk,
+      warn: locWarn
+    });
+  } else {
+    checks.push({
+      label: 'Image location vs aperture',
+      expected: 'at or above aperture',
+      got: 'NO IMAGE FOUND',
+      unit: '',
+      ok: false
+    });
+  }
+
+  // ========== OVERALL VERDICT ==========
+  // Answers: does a VISIBLE, SHARP image appear where a VIEWER can see it?
+  //
+  // 4 requirements:
+  // 1. No fatal constraint violations
+  // 2. Rays converge tightly (spread < threshold)
+  // 3. Image is above the aperture plane (not trapped in cavity)
+  // 4. Enough rays exit through the aperture
+  // 5. Image is close enough to aperture to be visible (not 500mm above)
+
+  const hasFatal = checks.some(c => c.fatal);
+  const raysConverge = convergencePoints.length >= 2 && ray_spread < 5;
+  const raysConvergeTight = convergencePoints.length >= 2 && ray_spread < 1;
+  const enoughRaysExit = exitPct > 20;
+  const enoughRaysExitGood = exitPct > 40;
+
+  const imageVisible = imageAboveAperture && imageNearAperture;
+  const imageTrapped = imageInsideCavity;
+
+  const imageFormed = !hasFatal && raysConverge && enoughRaysExit && imageVisible;
+  const imageGood = imageFormed && raysConvergeTight && enoughRaysExitGood;
+  const imagePerfect = imageGood && isCanonical && ray_spread < 0.1;
+
+  // Render
+  let html = '';
+
+  // Big verdict first — specific reason for failure
+  if (hasFatal) {
+    html += `<div class="verdict verdict--fail">NO REAL IMAGE — PHYSICS VIOLATED</div>`;
+  } else if (imageTrapped && raysConverge) {
+    html += `<div class="verdict verdict--fail">IMAGE TRAPPED INSIDE CAVITY — not visible</div>`;
+  } else if (imageWayAbove && raysConverge) {
+    html += `<div class="verdict verdict--warn">IMAGE TOO FAR ABOVE APERTURE — ${ray_imgY !== null ? (ray_imgY - vy2).toFixed(0) : '?'}mm up</div>`;
+  } else if (!raysConverge && raysCompleted > 0) {
+    html += `<div class="verdict verdict--fail">RAYS DIVERGE — no convergence (spread: ${ray_spread.toFixed(1)}mm)</div>`;
+  } else if (!enoughRaysExit) {
+    html += `<div class="verdict verdict--warn">MOST RAYS TRAPPED — only ${exitPct.toFixed(0)}% exit aperture</div>`;
+  } else if (!imageFormed) {
+    html += `<div class="verdict verdict--warn">NO USABLE IMAGE</div>`;
+  } else if (imageGood) {
+    html += `<div class="verdict verdict--pass">${imagePerfect ? 'PERFECT' : 'GOOD'} REAL IMAGE FORMS</div>`;
+  } else {
+    html += `<div class="verdict verdict--warn">DEGRADED IMAGE — visible but soft (spread: ${ray_spread.toFixed(1)}mm)</div>`;
+  }
+
+  // Detail rows
+  let passCount = 0, failCount = 0, warnCount = 0;
+  for (const c of checks) {
+    const isWarn = !c.ok && c.warn;
+    const isFatal = c.fatal;
+    const icon = c.ok ? '<span class="pass">✓</span>' : (isFatal ? '<span class="fail">✗✗</span>' : (isWarn ? '<span class="warn">⚠</span>' : '<span class="fail">✗</span>'));
+    const cls = c.ok ? 'pass' : (isFatal ? 'fail' : (isWarn ? 'warn' : 'fail'));
+    if (c.ok) passCount++; else if (isWarn) warnCount++; else failCount++;
+    html += `<div class="check-row">
+      <span class="check-label">${icon} ${c.label}</span>
+      <span class="check-expected">${c.expected}${c.unit}</span>
+      <span class="${cls} check-val">${c.got}${c.unit}</span>
+    </div>`;
+  }
+
+  html += `<div class="check-summary">
+    <span class="pass">${passCount} pass</span>
+    <span class="warn">${warnCount} warn</span>
+    <span class="fail">${failCount} fail</span>
+  </div>`;
+
+  document.getElementById('validator').innerHTML = html;
+}
+
+document.querySelectorAll('input[type=range]').forEach(el => el.addEventListener('input', draw));
+document.getElementById('sop').addEventListener('input', function() {
+  document.getElementById('vop').textContent = this.value;
+});
+draw();
+
+// ========== OPTIMIZER ==========
+// Pure math — no canvas, no DOM reads. Extracted from draw().
+// Returns { coneWidth, exitPct, spread, f1, f2, dSep } for a given config.
+
+function traceConfig(f1, f2, dSep, hObj, ap, nRays) {
+  const vy1 = -dSep / 2;
+  const vy2 = dSep / 2;
+  const rimSq = 4 * f1 * f2 * dSep / (f1 + f2);
+  if (rimSq <= 0) return null;
+  const halfW = Math.sqrt(rimSq);
+  const apHalf = ap / 2;
+
+  if (dSep >= 2 * Math.min(f1, f2)) return null; // divergent
+  if (hObj >= f1) return null; // object beyond focus
+
+  const objX = 0, objY = vy1 + hObj;
+
+  function parY(x, f, vy, s) { return s * x * x / (4 * f) + vy; }
+
+  function norm(x, f, s) {
+    const nx = -x / (2 * f), ny = s;
+    const len = Math.sqrt(nx*nx + ny*ny);
+    return [nx/len, ny/len];
+  }
+
+  function refl(dx, dy, nx, ny) {
+    const dot = dx*nx + dy*ny;
+    return [dx - 2*dot*nx, dy - 2*dot*ny];
+  }
+
+  function rayPar(ox, oy, dx, dy, f, vy, s) {
+    const u = ox, v = oy - vy, ff = 4*f;
+    const A = s*dx*dx/ff;
+    const B = 2*s*u*dx/ff - dy;
+    const C = s*u*u/ff - v;
+    if (Math.abs(A) < 1e-12) {
+      if (Math.abs(B) < 1e-12) return null;
+      const t = -C/B; return t > 0.001 ? t : null;
+    }
+    const disc = B*B - 4*A*C;
+    if (disc < 0) return null;
+    const sq = Math.sqrt(disc);
+    const t1 = (-B-sq)/(2*A), t2 = (-B+sq)/(2*A);
+    let t = null;
+    if (t1 > 0.001) t = t1;
+    if (t2 > 0.001 && (t === null || t2 < t)) t = t2;
+    return t;
+  }
+
+  function crossY(ox, oy, dx, dy, ly) {
+    if (Math.abs(dy) < 1e-12) return null;
+    const t = (ly - oy) / dy;
+    return t < 0.001 ? null : ox + t*dx;
+  }
+
+  const convergencePoints = [], exitAngles = [];
+  let completed = 0, attempted = 0;
+
+  for (let i = 0; i < nRays; i++) {
+    const angle = -70 + 140*(i+0.5)/nRays;
+    const theta = angle * Math.PI/180;
+    const dx = Math.sin(theta), dy = Math.cos(theta);
+    attempted++;
+
+    const t2 = rayPar(objX, objY, dx, dy, f2, vy2, -1);
+    if (t2 === null) continue;
+    const hx2 = objX + t2*dx, hy2 = objY + t2*dy;
+    if (Math.abs(hx2) > halfW || Math.abs(hx2) < apHalf) continue;
+
+    const [n2x,n2y] = norm(hx2, f2, -1);
+    const [rx2,ry2] = refl(dx, dy, n2x, n2y);
+
+    const t1 = rayPar(hx2, hy2, rx2, ry2, f1, vy1, +1);
+    if (t1 === null) continue;
+    const hx1 = hx2 + t1*rx2, hy1 = hy2 + t1*ry2;
+    if (Math.abs(hx1) > halfW) continue;
+    if (Math.abs(hy1 - parY(hx1, f1, vy1, +1)) > 0.5) continue;
+
+    const [n1x,n1y] = norm(hx1, f1, +1);
+    const [rx1,ry1] = refl(rx2, ry2, n1x, n1y);
+
+    const t2b = rayPar(hx1, hy1, rx1, ry1, f2, vy2, -1);
+    let hitsM2 = false;
+    if (t2b !== null) {
+      const rhx = hx1 + t2b*rx1;
+      if (Math.abs(rhx) >= apHalf && Math.abs(rhx) <= halfW) hitsM2 = true;
+    }
+
+    const cx = crossY(hx1, hy1, rx1, ry1, vy2);
+    if (cx !== null && Math.abs(cx) < apHalf && !hitsM2) {
+      completed++;
+      exitAngles.push(Math.atan2(Math.abs(ry1), Math.abs(rx1)) * 180/Math.PI);
+      if (Math.abs(rx1) > 1e-6) {
+        const tA = -hx1/rx1;
+        if (tA > 0) {
+          const cY = hy1 + tA*ry1;
+          if (cY >= vy2 - 5) convergencePoints.push(cY);
+        }
+      }
+    }
+  }
+
+  if (exitAngles.length < 2) return null;
+
+  const convergenceCount = convergencePoints.length;
+  const spread = convergenceCount > 1
+    ? Math.max(...convergencePoints) - Math.min(...convergencePoints) : Infinity;
+  const coneWidth = Math.max(...exitAngles) - Math.min(...exitAngles);
+  const exitPct = completed / attempted * 100;
+  const imgY = convergenceCount > 0
+    ? convergencePoints.reduce((a, b) => a + b, 0) / convergenceCount : null;
+
+  const exitAngles_max = exitAngles.length > 0 ? Math.max(...exitAngles) : 0;
+  const exitAngles_min = exitAngles.length > 0 ? Math.min(...exitAngles) : 0;
+
+  return { coneWidth, exitPct, spread, convergenceCount, imgY, exitAngles_max, exitAngles_min, f1, f2, dSep };
+}
+
+function runOptimizer() {
+  const btn = document.getElementById('opt-btn');
+  const resultDiv = document.getElementById('opt-result');
+  const progressDiv = document.getElementById('opt-progress');
+
+  btn.style.color = '#666';
+  btn.style.borderLeftColor = '#444';
+  btn.textContent = '⏳ SEARCHING...';
+  btn.disabled = true;
+  resultDiv.style.display = 'none';
+  progressDiv.style.display = 'block';
+
+  // Object height ratio from slider (explicit, not hardcoded)
+  const OBJ_PCT = parseFloat(document.getElementById('sop').value) / 100;
+  const nRays = 40;
+
+  // Coarse search: r1, r2 in 50 steps, d in 13 steps, ap in 5 steps
+  // 50 × 50 × 13 × 5 = 162,500 configs × 3 heights = 487,500 traces
+  const r1Vals  = Array.from({length:50}, (_,i) => 0.5 + i*0.03);   // f1/d_sep 0.50–1.97
+  const r2Vals  = Array.from({length:50}, (_,i) => 0.5 + i*0.03);   // f2/d_sep 0.50–1.97
+  const dVals   = Array.from({length:13}, (_,i) => 30 + i*10);      // d_sep 30–150mm
+  const apRatios = [0.10, 0.13, 0.15, 0.18, 0.20];                  // aperture/D
+
+  let best = null;
+  let checked = 0;
+  const total = r1Vals.length * r2Vals.length * dVals.length * apRatios.length;
+
+  function scoreConfig(f1, f2, dSep, AP_RATIO) {
+    const rimSq = 4 * f1 * f2 * dSep / (f1 + f2);
+    if (rimSq <= 0) return null;
+    const D = 2 * Math.sqrt(rimSq);
+    const ap = AP_RATIO * D;
+    const vy2_check = dSep / 2;
+    const maxH = OBJ_PCT * f1;
+    const heights = [0, maxH * 0.5, maxH];
+
+    let intersectMin = -Infinity;
+    let intersectMax =  Infinity;
+
+    for (const h of heights) {
+      const r = traceConfig(f1, f2, dSep, h, ap, nRays);
+      if (!r || r.convergenceCount < 2 || r.spread >= 1 || r.exitPct <= 50
+          || r.imgY === null || r.imgY < vy2_check) return null;  // image must be AT or above aperture, no tolerance
+      intersectMin = Math.max(intersectMin, r.exitAngles_min);
+      intersectMax = Math.min(intersectMax, r.exitAngles_max);
+    }
+
+    if (intersectMax <= intersectMin) return null;
+    return { intersectWidth: intersectMax - intersectMin, intersectMin, intersectMax,
+             f1, f2, dSep, D, AP_RATIO, maxH,
+             r1: f1/dSep, r2: f2/dSep };
+  }
+
+  // Coarse search
+  function chunk(r1i, r2i, di, api) {
+    const t0 = performance.now();
+    while (true) {
+      if (r1i >= r1Vals.length) { refine(); return; }
+
+      const dSep = dVals[di];
+      const f1 = r1Vals[r1i] * dSep;
+      const f2 = r2Vals[r2i] * dSep;
+      const AP_RATIO = apRatios[api];
+
+      const result = scoreConfig(f1, f2, dSep, AP_RATIO);
+      checked += 3; // 3 height traces per config
+
+      if (result && (!best || result.intersectWidth > best.intersectWidth)) {
+        best = result;
+      }
+
+      // Advance indices: api → di → r2i → r1i
+      api++;
+      if (api >= apRatios.length) { api = 0; di++; }
+      if (di >= dVals.length)     { di = 0; r2i++; }
+      if (r2i >= r2Vals.length)   { r2i = 0; r1i++; }
+
+      if (performance.now() - t0 > 16) {
+        progressDiv.textContent = `coarse search... ${Math.round(checked/(total*3)*100)}% — best so far: ${best ? best.intersectWidth.toFixed(1)+'°' : '—'}`;
+        setTimeout(() => chunk(r1i, r2i, di, api), 0);
+        return;
+      }
+    }
+  }
+
+  // Refinement pass: fine grid around coarse winner
+  function refine() {
+    if (!best) { done(); return; }
+    progressDiv.textContent = `refining around best... f₁/d=${best.r1.toFixed(3)}, f₂/d=${best.r2.toFixed(3)}`;
+
+    const step = 0.003; // 10× finer than coarse
+    const w = 0.045;    // search ±0.045 around winner (15 fine steps each side)
+    const fineR1 = Array.from({length:31}, (_,i) => best.r1 - w + i*step);
+    const fineR2 = Array.from({length:31}, (_,i) => best.r2 - w + i*step);
+    const fineAp = [best.AP_RATIO - 0.02, best.AP_RATIO, best.AP_RATIO + 0.02].filter(v => v > 0.05 && v < 0.35);
+    const refDSep = best.dSep;
+
+    let fineBest = best;
+
+    for (const r1 of fineR1) {
+      for (const r2 of fineR2) {
+        for (const ap of fineAp) {
+          if (r1 <= 0.1 || r2 <= 0.1) continue;
+          const result = scoreConfig(r1 * refDSep, r2 * refDSep, refDSep, ap);
+          if (result && result.intersectWidth > fineBest.intersectWidth) {
+            fineBest = result;
+          }
+        }
+      }
+    }
+
+    best = fineBest;
+    done();
+  }
+
+  function done() {
+    btn.disabled = false;
+    btn.style.color = '#d44';
+    btn.style.borderLeftColor = '#d44';
+    btn.textContent = '▶ FIND OPTIMAL MIRROR GEOMETRY — exhaustive search + refinement';
+    progressDiv.style.display = 'none';
+
+    if (!best) {
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = '<span style="color:#f04040">No valid configuration found.</span>';
+      return;
+    }
+
+    // Get base stats for display
+    const rimSq = 4 * best.f1 * best.f2 * best.dSep / (best.f1 + best.f2);
+    const D = 2 * Math.sqrt(rimSq);
+    const ap = best.AP_RATIO * D;
+    const rBase = traceConfig(best.f1, best.f2, best.dSep, 0, ap, nRays);
+
+    const setSlider = (id, val) => {
+      const el = document.getElementById(id);
+      el.value = Math.max(parseFloat(el.min), Math.min(parseFloat(el.max), Math.round(val)));
+      document.getElementById('v' + id.slice(1)).textContent = el.value;
+    };
+    setSlider('sf',  best.f1);
+    setSlider('sf2', best.f2);
+    setSlider('sd',  best.dSep);
+    setSlider('sa',  Math.round(ap));
+    setSlider('sh',  Math.round(best.maxH));
+    setSlider('sr',  nRays);
+    draw();
+
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = `
+<span style="color:#40f040;font-weight:700">OPTIMAL PARABOLIC RATIOS FOUND</span>
+──────────────────────────────────────────
+DIMENSIONLESS RATIOS (scale to any size):
+  f₁ / d_sep   : <span style="color:#d44;font-weight:700">${best.r1.toFixed(4)}</span>
+  f₂ / d_sep   : <span style="color:#d44;font-weight:700">${best.r2.toFixed(4)}</span>
+  aperture / D : <span style="color:#d44;font-weight:700">${best.AP_RATIO.toFixed(3)}</span>
+──────────────────────────────────────────
+AT REFERENCE SCALE (d_sep = ${best.dSep}mm):
+  f₁ = ${best.f1.toFixed(1)} mm  |  f₂ = ${best.f2.toFixed(1)} mm
+  D  = ${D.toFixed(1)} mm  |  aperture = ${ap.toFixed(1)} mm
+──────────────────────────────────────────
+OBJECT: 3 points — 0%, 50%, 100% of max height
+  Object height : ${(OBJ_PCT*100).toFixed(0)}% of f₁ = ${best.maxH.toFixed(2)} mm
+──────────────────────────────────────────
+TRUE VIEWING WINDOW (whole object visible):
+  θ_min : ${best.intersectMin.toFixed(2)}°  →  θ_max : ${best.intersectMax.toFixed(2)}°
+  Width : <span style="color:#40f040;font-weight:700">${best.intersectWidth.toFixed(2)}°</span>
+──────────────────────────────────────────
+BASE POINT (h=0) STATS:
+  Rays exiting : ${rBase ? rBase.exitPct.toFixed(0) : '?'}%
+  Spread       : ${rBase ? rBase.spread.toFixed(3) : '?'} mm
+  Convergence  : ${rBase ? rBase.convergenceCount : '?'} rays confirmed
+──────────────────────────────────────────
+<span style="color:#666">Coarse search + fine refinement completed.
+Ratios scale to any device size.</span>`;
+  }
+
+  setTimeout(() => chunk(0, 0, 0, 0), 0);
+}
+</script>
+
+
+<div style="max-width:50rem;width:100%;margin:2px 0 2px 0;font-family:'SF Mono','Fira Code',Consolas,monospace;font-size:0.75rem;line-height:1;background:transparent;">
+
+  <!-- AUDIT LOG HEADER -->
+  <div style="background:#0d0d0d;border-left:4px solid #a83232;padding:0.75rem 1rem;margin-bottom:1px;">
+    <span style="color:#d44;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Research Audit Log</span>
+    <span style="color:#444;margin-left:1rem;">parabolic mirascope · optimal geometry search · Elijah · 2026</span>
+  </div>
+
+  <!-- RUN 1 -->
+  <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
+    <span style="color:#555;">2026-05-06 #1</span>
+    <span style="color:#888;font-weight:700;">BASELINE — single point, h=0, 20 rays, ap/D fixed 0.15</span>
+    <span></span>
+    <span style="color:#666;">f₁/d=1.000 · f₂/d=1.000 · ap/D=0.150 → cone 44°</span>
+    <span></span>
+    <span style="color:#555;font-style:italic;">Canonical symmetric mirascope. Every commercial unit uses this. Established baseline.</span>
+  </div>
+
+  <!-- RUN 2 -->
+  <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
+    <span style="color:#555;">2026-05-06 #2</span>
+    <span style="color:#888;font-weight:700;">FIRST ASYMMETRIC FIND — convergence bug present</span>
+    <span></span>
+    <span style="color:#666;">f₁/d=0.820 · f₂/d=1.120 · d=100mm → cone 53°  ⚠ image not confirmed above aperture</span>
+    <span></span>
+    <span style="color:#555;font-style:italic;">Optimizer found asymmetric config but validity check allowed image below aperture. Discarded.</span>
+  </div>
+
+  <!-- RUN 3 -->
+  <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
+    <span style="color:#555;">2026-05-06 #3</span>
+    <span style="color:#888;font-weight:700;">SINGLE POINT · image-above-aperture fix applied · 20 rays</span>
+    <span></span>
+    <span style="color:#666;">f₁/d=0.917 · f₂/d=1.079 · ap/D=0.080 → window 55.05° (23.45°–78.50°)</span>
+    <span></span>
+    <span style="color:#555;font-style:italic;">First clean result. Asymmetry confirmed. Small aperture wins. Canonical is not optimal.</span>
+  </div>
+
+  <!-- RUN 4 -->
+  <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
+    <span style="color:#555;">2026-05-06 #4</span>
+    <span style="color:#888;font-weight:700;">3-POINT OBJECT · ap/D as search variable · coarse+refine · 20 rays</span>
+    <span></span>
+    <span style="color:#666;">f₁/d=0.917 · f₂/d=1.079 · ap/D=0.080 → window 55.05° (23.45°–78.50°)</span>
+    <span></span>
+    <span style="color:#555;font-style:italic;">3-point intersection added. Ratios held from run 3 — result is stable. Aperture ratio confirmed at 0.08.</span>
+  </div>
+
+  <!-- RUN 5 -->
+  <div style="background:#161616;padding:0.65rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
+    <span style="color:#555;">2026-05-06 #5</span>
+    <span style="color:#888;font-weight:700;">3-POINT OBJECT · ap/D variable · hard imgY=0 · 40 rays · d_sep 60–150mm</span>
+    <span></span>
+    <span style="color:#666;">f₁/d=0.9290 · f₂/d=1.0850 · ap/D=0.100 · d=60mm → window 57.99° (22.56°–80.54°)</span>
+    <span></span>
+    <span style="color:#555;font-style:italic;">Ratios stable vs 20-ray result. 32% wider than canonical. d_sep hitting floor of search range at 60mm — needs investigation.</span>
+  </div>
+
+  <!-- RUN 6 — BEST SO FAR -->
+  <div style="background:#0a1a0a;padding:0.65rem 1rem;margin-bottom:1px;border-left:2px solid #40f040;display:grid;grid-template-columns:7rem 1fr;gap:0.5rem 1rem;">
+    <span style="color:#40f040;">2026-05-06 #6</span>
+    <span style="color:#40f040;font-weight:700;">CONFIRMED — d_sep range extended to 30mm · ratios held · parabolic ceiling set</span>
+    <span></span>
+    <span style="color:#ccc;">f₁/d=0.9230 · f₂/d=1.0910 · ap/D=0.100 · d=40mm → window <strong>58.18°</strong> (22.29°–80.47°)</span>
+    <span></span>
+    <span style="color:#888;font-style:italic;">d_sep dropped to 40mm but window width unchanged at ~58°. Ratios shifted &lt;1% across all runs.
+      Three independent confirmations of same answer. Parabolic ceiling is real and confirmed.</span>
+  </div>
+
+  <!-- FINDINGS -->
+  <div style="background:#0d0d0d;border-left:4px solid #555;padding:0.75rem 1rem;margin-bottom:1px;color:#888;">
+    <div style="color:#999;font-weight:700;margin-bottom:0.4rem;">KEY FINDINGS — parabolic family ceiling CONFIRMED</div>
+    <div style="margin-bottom:0.25rem;">① Optimal parabolic mirascope is <span style="color:#ccc;">asymmetric</span> — f₁ ≠ f₂. Every commercial unit uses identical mirrors. That is suboptimal.</div>
+    <div style="margin-bottom:0.25rem;">② Confirmed ratios: <span style="color:#ccc;">f₁/d ≈ 0.923 · f₂/d ≈ 1.091</span> — bottom mirror shorter, top longer. Stable across 6 runs.</div>
+    <div style="margin-bottom:0.25rem;">③ Optimal aperture = <span style="color:#ccc;">10% of mirror diameter</span>, not the typical 15–20%.</div>
+    <div style="margin-bottom:0.25rem;">④ d_sep does not affect viewing window width — only device scale. Ratios are all that matter.</div>
+    <div style="margin-bottom:0.25rem;">⑤ True viewing window for whole object: <span style="color:#40f040;font-weight:700;">~58°</span> vs canonical <span style="color:#d44;">~44°</span> — <span style="color:#40f040;font-weight:700;">32% improvement</span> within parabolic family.</div>
+    <div style="margin-bottom:0.25rem;">⑥ These are <span style="color:#ccc;">dimensionless ratios</span> — multiply by any d_sep to get real dimensions.</div>
+    <div style="color:#555;margin-top:0.5rem;">⬡ Parabolic phase complete. Ceiling confirmed at ~58°. Non-parabolic search is next phase.</div>
+  </div>
+
+</div>
+
+<div style="max-width:50rem;width:100%;margin:2px 0;font-family:'SF Mono','Fira Code',Consolas,monospace;font-size:0.75rem;line-height:1;background:transparent;">
+
+  <!-- CHECKLIST HEADER -->
+  <div style="background:#0d0d0d;border-left:4px solid #2a6a8a;padding:0.75rem 1rem;margin-bottom:1px;">
+    <span style="color:#4aabcf;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Research Checklist</span>
+    <span style="color:#444;margin-left:1rem;">mirascope optimal geometry · all phases · Elijah · 2026</span>
+  </div>
+
+  <!-- PHASE 1 -->
+  <div style="background:#111;border-left:4px solid #1a4a1a;padding:0.6rem 1rem;margin-bottom:1px;">
+    <span style="color:#40f040;font-weight:700;letter-spacing:0.06em;">PHASE 1 — PARABOLIC FAMILY</span>
+    <span style="color:#40f040;margin-left:0.75rem;">✓ COMPLETE · ceiling 58.18°</span>
+  </div>
+
+  <div style="background:#161616;padding:0.5rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:1.2rem 1fr;gap:0.3rem 0.75rem;align-items:start;">
+    <span style="color:#40f040;">✓</span><span style="color:#777;">Canonical symmetric config (f1=f2=d_sep) — <span style="color:#555;">baseline 44°</span></span>
+    <span style="color:#40f040;">✓</span><span style="color:#777;">Asymmetric focal lengths (f1 ≠ f2) — <span style="color:#ccc;">optimal f1/d=0.923 · f2/d=1.091</span></span>
+    <span style="color:#40f040;">✓</span><span style="color:#777;">Aperture ratio as free variable — <span style="color:#ccc;">optimal ap/D=0.10</span></span>
+    <span style="color:#40f040;">✓</span><span style="color:#777;">Separation distance range — <span style="color:#ccc;">scale only, ratios are all that matter</span></span>
+    <span style="color:#40f040;">✓</span><span style="color:#777;">Multi-point object (3 heights, intersection) — <span style="color:#ccc;">window 58.18°</span></span>
+    <span style="color:#40f040;">✓</span><span style="color:#777;">Edge trimming — <span style="color:#555;">subsumed by ap/D=0.10 finding</span></span>
+    <span style="color:#40f040;">✓</span><span style="color:#777;">Raised separation / larger device — <span style="color:#555;">subsumed by d_sep scale finding</span></span>
+    <span style="color:#555;">—</span><span style="color:#444;">Curved edges — <span style="color:#333;font-style:italic;">skip · fabrication not optics · no sim model</span></span>
+  </div>
+
+  <!-- PHASE 2 -->
+  <div style="background:#111;border-left:4px solid #1a1a4a;padding:0.6rem 1rem;margin-bottom:1px;margin-top:2px;">
+    <span style="color:#4a4acf;font-weight:700;letter-spacing:0.06em;">PHASE 2 — PATH GEOMETRY</span>
+    <span style="color:#444;margin-left:0.75rem;">○ NOT STARTED</span>
+  </div>
+
+  <div style="background:#161616;padding:0.5rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:1.2rem 1fr;gap:0.3rem 0.75rem;align-items:start;">
+    <span style="color:#333;">☐</span><span style="color:#666;">4-bounce paths — does longer path produce wider exit angles?</span>
+    <span style="color:#333;">☐</span><span style="color:#666;">6-bounce paths — secondary images, wider still?</span>
+    <span style="color:#333;">☐</span><span style="color:#666;">Aperture location — off-center, bottom mirror, side</span>
+    <span style="color:#333;">☐</span><span style="color:#666;">Aperture shape — circular vs slot vs annular ring</span>
+  </div>
+
+  <!-- PHASE 3 -->
+  <div style="background:#111;border-left:4px solid #1a1a4a;padding:0.6rem 1rem;margin-bottom:1px;margin-top:2px;">
+    <span style="color:#4a4acf;font-weight:700;letter-spacing:0.06em;">PHASE 3 — MIRROR CONFIGURATION</span>
+    <span style="color:#444;margin-left:0.75rem;">○ NOT STARTED</span>
+  </div>
+
+  <div style="background:#161616;padding:0.5rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:1.2rem 1fr;gap:0.3rem 0.75rem;align-items:start;">
+    <span style="color:#333;">☐</span><span style="color:#666;">Symmetric axis tilt — mirrors angled toward each other (V shape)</span>
+    <span style="color:#333;">☐</span><span style="color:#666;">Lateral offset — top mirror shifted off-axis</span>
+    <span style="color:#333;">☐</span><span style="color:#666;">One mirror flat, one concave — hybrid configuration</span>
+    <span style="color:#333;">☐</span><span style="color:#666;">Unequal mirror diameters — top and bottom different sizes</span>
+  </div>
+
+  <!-- PHASE 4 -->
+  <div style="background:#111;border-left:4px solid #1a1a4a;padding:0.6rem 1rem;margin-bottom:1px;margin-top:2px;">
+    <span style="color:#4a4acf;font-weight:700;letter-spacing:0.06em;">PHASE 4 — NON-PARABOLIC SHAPES</span>
+    <span style="color:#444;margin-left:0.75rem;">○ NOT STARTED · requires new simulator</span>
+  </div>
+
+  <div style="background:#161616;padding:0.5rem 1rem;margin-bottom:1px;display:grid;grid-template-columns:1.2rem 1fr;gap:0.3rem 0.75rem;align-items:start;">
+    <span style="color:#333;">☐</span><span style="color:#666;">Spherical mirrors — simpler to manufacture, how much do they lose?</span>
+    <span style="color:#333;">☐</span><span style="color:#666;">Elliptical mirrors — different conic section</span>
+    <span style="color:#333;">☐</span><span style="color:#666;">Freeform surface — control points, optimizer finds the shape</span>
+    <span style="color:#333;">☐</span><span style="color:#666;">Composite surface — parabolic center, different curve at rim</span>
+  </div>
+
+  <!-- OPEN QUESTIONS -->
+  <div style="background:#0d0d0d;border-left:4px solid #2a2a2a;padding:0.75rem 1rem;margin-top:2px;color:#555;">
+    <div style="color:#666;font-weight:700;margin-bottom:0.5rem;">OPEN QUESTIONS</div>
+    <div style="margin-bottom:0.3rem;">? Does optimal shape change with object size ratio?</div>
+    <div style="margin-bottom:0.3rem;">? Is there a theoretical maximum viewing angle from first principles?</div>
+    <div style="margin-bottom:0.3rem;">? Do 4-bounce paths share the same image point as 2-bounce paths?</div>
+    <div style="margin-bottom:0.3rem;">? Can aperture location and mirror tilt be co-optimized?</div>
+    <div style="margin-bottom:0.3rem;">? Does the asymmetric optimum (f1≠f2) hold for non-parabolic shapes?</div>
+  </div>
+
+</div>
+
+<div class="caption">
+  Self-validating mirascope ray trace simulator · Based on analysis by Adhya &amp; Noé (Stony Brook, 2007) · Original device by Elings &amp; Landry (US 3,647,284, 1972) · Elijah · Published: May 4, 2026
+</div>
+
+</body>
+</html>
