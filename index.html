@@ -1206,9 +1206,7 @@
                         <div class="sim__stats" id="sim-stats">
                             <span>rays traced: <span class="sim__stat-value" id="sim-stat-traced">—</span></span>
                             <span>image-forming: <span class="sim__stat-value" id="sim-stat-escaped">—</span></span>
-                            <span>red image y: <span class="sim__stat-value" id="sim-stat-img-r">—</span></span>
-                            <span>green image y: <span class="sim__stat-value" id="sim-stat-img-g">—</span></span>
-                            <span>blue image y: <span class="sim__stat-value" id="sim-stat-img-b">—</span></span>
+                            <span>total bounces: <span class="sim__stat-value" id="sim-stat-bounces">—</span></span>
                         </div>
                     </div>
 
@@ -1586,15 +1584,14 @@
                         }
 
                         // Real 2-D convergence point — where all escaped rays meet.
-                        // Off-axis LEDs in parabolic systems focus much further up than
-                        // on-axis ones (spherical aberration). Use a generous upper bound
-                        // so red/blue markers don't get filtered out, and reject only
-                        // virtual focuses below the aperture or absurdly far singular results.
+                        // Reject results above a sane horizon: near-parallel ray bundles
+                        // (on-axis LED) produce a singular system and a junk far point —
+                        // we treat those as "no finite focus" and just fan the rays.
                         const raw = findConvergence(escapedRays);
                         const imagePoint = (raw
                             && Number.isFinite(raw[0]) && Number.isFinite(raw[1])
                             && raw[1] > p.vy2
-                            && raw[1] < p.vy2 + p.dsep * 12)
+                            && raw[1] < p.vy2 + p.dsep * 3)
                             ? raw : null;
                         return { ledX, objY, traces, imagePoint, color: LED_COLORS[i] };
                     });
@@ -1716,13 +1713,9 @@
                         }
                     });
 
-                    // Stats — image y reported as height above the aperture in mm
-                    const fmtImgY = (ip) => ip ? `${(ip[1] - p.vy2).toFixed(1)} mm` : '∞';
                     document.getElementById('sim-stat-traced').textContent = totalTraced;
                     document.getElementById('sim-stat-escaped').textContent = totalEscaped;
-                    document.getElementById('sim-stat-img-r').textContent = fmtImgY(ledData[0].imagePoint);
-                    document.getElementById('sim-stat-img-g').textContent = fmtImgY(ledData[1].imagePoint);
-                    document.getElementById('sim-stat-img-b').textContent = fmtImgY(ledData[2].imagePoint);
+                    document.getElementById('sim-stat-bounces').textContent = totalEscaped * p.nbounces;
                 };
 
                 document.getElementById('sim-run').addEventListener('click', run);
