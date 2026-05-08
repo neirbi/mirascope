@@ -1389,6 +1389,23 @@
                     return ox + t * dx;
                 };
 
+                // Least-squares convergence point of a set of 2-D rays.
+                // Each ray: { point: [x,y], dir: [vx,vy] } (dir must be unit-length).
+                // Minimises sum of squared perpendicular distances to all ray lines.
+                const findConvergence = (rays) => {
+                    if (rays.length < 2) return rays.length === 1 ? rays[0].point : null;
+                    let a00 = 0, a01 = 0, a11 = 0, b0 = 0, b1 = 0;
+                    for (const { point: [px, py], dir: [vx, vy] } of rays) {
+                        const mxx = 1 - vx * vx, mxy = -vx * vy, myy = 1 - vy * vy;
+                        a00 += mxx; a01 += mxy; a11 += myy;
+                        b0 += mxx * px + mxy * py;
+                        b1 += mxy * px + myy * py;
+                    }
+                    const det = a00 * a11 - a01 * a01;
+                    if (Math.abs(det) < 1e-10) return null;
+                    return [(a11 * b0 - a01 * b1) / det, (a00 * b1 - a01 * b0) / det];
+                };
+
                 // Trace one ray. Performs nbounces reflections, then tests whether
                 // the final straight-line segment exits through the aperture.
                 // Returns:
@@ -1521,7 +1538,7 @@
                         // Object position: on M1 surface at offset ledX
                         const objY = parabolaY(ledX, p.f1, +1, p.vy1) + p.h_obj + EPS * 10;
                         const traces = [];
-                        const axisCrossings = []; // y-coord where each escaped ray crosses x=0
+                        const escapedRays = []; // { point, dir } for each escaped ray at aperture
 
                         for (let r = 0; r < p.nrays; r++) {
                             // Centered sampling: (i + 0.5) / nrays
@@ -1535,31 +1552,21 @@
                             totalTraced++;
                             if (result.escaped) {
                                 totalEscaped++;
-                                // Where does the escaping ray cross x=0?
-                                const [ex, ey] = result.exitPoint;
-                                const [vx, vy] = result.exitDir;
-                                if (Math.abs(vx) > 1e-9) {
-                                    const tAxis = -ex / vx;
-                                    if (tAxis > 0) {
-                                        axisCrossings.push(ey + tAxis * vy);
-                                    }
-                                }
+                                escapedRays.push({ point: result.exitPoint, dir: result.exitDir });
                             }
                             traces.push(result);
                         }
 
-                        // Image y = mean of axis crossings (uses symmetry: image x=0)
-                        let imageY = null;
-                        if (axisCrossings.length > 0) {
-                            imageY = axisCrossings.reduce((s, v) => s + v, 0) / axisCrossings.length;
-                        }
-
-                        return { ledX, objY, traces, imageY, color: LED_COLORS[i] };
+                        // Real 2-D convergence point — where all escaped rays meet
+                        const imagePoint = findConvergence(escapedRays);
+                        return { ledX, objY, traces, imagePoint, color: LED_COLORS[i] };
                     });
 
-                    // Determine viewBox top from computed image positions
-                    const imgYs = ledData.map(d => d.imageY).filter(y => y !== null && Number.isFinite(y));
-                    const maxImgY = imgYs.length ? Math.max(p.vy2 + 20, ...imgYs) : p.vy2 + p.dsep * 0.5;
+                    // Determine viewBox top from computed image positions + diverging tail room
+                    const imgYs = ledData.map(d => d.imagePoint && d.imagePoint[1]).filter(y => y != null && Number.isFinite(y));
+                    const maxImgY = imgYs.length
+                        ? Math.max(p.vy2 + 20, ...imgYs) + p.dsep * 0.75
+                        : p.vy2 + p.dsep * 0.5;
                     const margin = Math.max(20, p.D * 0.1);
                     const yMax = maxImgY + margin;
                     const yMin = p.vy1 - margin;
@@ -1593,35 +1600,57 @@
                     root.appendChild(make('path', { ...mirrorAttrs, d: parabolaPathWithGap(p.f2, -1, p.vy2, p.halfW, p.a) }));
 
                     // Render rays
-                    ledData.forEach(({ ledX, objY, traces, imageY, color }) => {
+                    ledData.forEach(({ ledX, objY, traces, imagePoint, color }) => {
                         traces.forEach((result) => {
                             const pts = result.points.slice();
+                            let divergeTail = null; // [imgPt, farPt] drawn at lower opacity
+
                             if (result.escaped && result.exitPoint && result.exitDir) {
-                                // Draw the escaped segment from M1 hit through aperture
-                                // and onward to the image plane (or a sensible distance)
-                                pts.push(result.exitPoint);
-                                if (imageY !== null && Number.isFinite(imageY)) {
-                                    const [ex, ey] = result.exitPoint;
-                                    const [vx, vy] = result.exitDir;
-                                    if (Math.abs(vy) > 1e-9) {
-                                        const tImg = (imageY - ey) / vy;
-                                        if (tImg > 0) {
-                                            pts.push([ex + tImg * vx, imageY]);
-                                        }
+                                const [ex, ey] = result.exitPoint;
+                                const [vx, vy] = result.exitDir;
+                                pts.push([ex, ey]);
+
+                                if (imagePoint) {
+                                    const [ix, iy] = imagePoint;
+                                    // t to reach the convergence point along this ray
+                                    const tImg = Math.abs(vy) >= Math.abs(vx)
+                                        ? (iy - ey) / vy
+                                        : (ix - ex) / vx;
+                                    if (tImg > 0) {
+                                        const imgPt = [ex + tImg * vx, ey + tImg * vy];
+                                        pts.push(imgPt);
+                                        // Diverging tail past focus — shows viewing-angle cone
+                                        const tFar = tImg + p.dsep * 0.65;
+                                        divergeTail = [imgPt, [ex + tFar * vx, ey + tFar * vy]];
                                     }
                                 }
                             }
-                            if (pts.length < 2) return;
-                            const ptsStr = pts.map(([x, y]) => `${x.toFixed(3)},${y.toFixed(3)}`).join(' ');
-                            root.appendChild(make('polyline', {
-                                points: ptsStr,
-                                fill: 'none',
-                                stroke: color,
-                                'stroke-width': '0.4',
-                                'stroke-linecap': 'round',
-                                'stroke-linejoin': 'round',
-                                opacity: result.escaped ? '0.85' : '0.22',
-                            }));
+
+                            if (pts.length >= 2) {
+                                const ptsStr = pts.map(([x, y]) => `${x.toFixed(3)},${y.toFixed(3)}`).join(' ');
+                                root.appendChild(make('polyline', {
+                                    points: ptsStr,
+                                    fill: 'none',
+                                    stroke: color,
+                                    'stroke-width': '0.4',
+                                    'stroke-linecap': 'round',
+                                    'stroke-linejoin': 'round',
+                                    opacity: result.escaped ? '0.85' : '0.22',
+                                }));
+                            }
+
+                            // Diverging tail past focus — faded to distinguish from converging portion
+                            if (divergeTail) {
+                                const tailStr = divergeTail.map(([x, y]) => `${x.toFixed(3)},${y.toFixed(3)}`).join(' ');
+                                root.appendChild(make('polyline', {
+                                    points: tailStr,
+                                    fill: 'none',
+                                    stroke: color,
+                                    'stroke-width': '0.4',
+                                    'stroke-linecap': 'round',
+                                    opacity: '0.32',
+                                }));
+                            }
                         });
 
                         // Object marker (LED)
@@ -1629,18 +1658,15 @@
                             cx: ledX, cy: objY, r: 1.8, fill: color,
                         }));
 
-                        // Image marker
-                        if (imageY !== null && Number.isFinite(imageY)) {
-                            // For symmetry-based reconstruction: x is mirrored (image
-                            // forms at -ledX). Use mean of escaped axis crossings
-                            // for y, and -ledX for x.
-                            const imgX = -ledX;
+                        // Image marker at the real 2-D convergence point
+                        if (imagePoint) {
+                            const [imgX, imgY] = imagePoint;
                             root.appendChild(make('circle', {
-                                cx: imgX, cy: imageY, r: 3,
+                                cx: imgX, cy: imgY, r: 3,
                                 fill: color, opacity: '0.25',
                             }));
                             root.appendChild(make('circle', {
-                                cx: imgX, cy: imageY, r: 1.5, fill: color,
+                                cx: imgX, cy: imgY, r: 1.5, fill: color,
                             }));
                         }
                     });
