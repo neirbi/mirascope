@@ -825,38 +825,37 @@
 
         .sim__controls {
             display: flex;
-            flex-direction: row;
-            flex-wrap: wrap;
-            gap: var(--space-lg);
-            align-items: flex-start;
-        }
-
-        .sim__group {
-            display: flex;
             flex-direction: column;
-            gap: var(--space-xs);
+            gap: var(--space-md);
         }
 
-        .sim__group-label {
-            font-size: var(--text-sm);
-            font-weight: var(--weight-bold);
-            color: var(--color-text-tertiary);
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            margin: 0;
+        /* Single horizontal row of all input fields. Wraps on narrow viewports. */
+        .sim__row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-sm);
         }
 
         .sim__field {
-            display: grid;
-            grid-template-columns: 1fr 5rem;
-            gap: var(--space-sm);
-            align-items: center;
+            display: flex;
+            flex-direction: column;
+            gap: 0.375rem;
+            flex: 1 1 8rem;
+            min-width: 0;
         }
 
         .sim__field label {
             font-family: var(--font-mono);
             font-size: var(--text-sm);
             color: var(--color-text-secondary);
+        }
+
+        /* Wraps the input + unit suffix so the suffix can be absolutely
+           positioned over the input's right edge. */
+        .sim__input-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
         }
 
         .sim__field input {
@@ -871,16 +870,30 @@
             text-align: right;
             width: 100%;
         }
+        /* Reserve room for the unit suffix when present */
+        .sim__input-wrap:has(.sim__unit) input {
+            padding-right: 2.25rem;
+        }
         .sim__field input:focus-visible {
             outline: 2px solid var(--color-accent);
             outline-offset: 2px;
+        }
+
+        .sim__unit {
+            position: absolute;
+            right: 0.625rem;
+            font-family: var(--font-mono);
+            font-size: var(--text-sm);
+            color: var(--color-text-tertiary);
+            pointer-events: none;
         }
 
         .sim__run {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 0.875rem 1.5rem;
+            align-self: center;
+            padding: 0.875rem 2.5rem;
             font-size: var(--text-base);
             font-weight: var(--weight-semibold);
             color: #fff;
@@ -889,7 +902,6 @@
             border-radius: var(--radius-md);
             cursor: pointer;
             transition: transform var(--transition-base), opacity var(--transition-base);
-            margin-top: var(--space-xs);
         }
         .sim__run:hover { transform: translateY(-1px); }
         .sim__run:active { transform: translateY(0); opacity: 0.9; }
@@ -1194,44 +1206,60 @@
                         <div class="sim__stats" id="sim-stats">
                             <span>rays traced: <span class="sim__stat-value" id="sim-stat-traced">—</span></span>
                             <span>image-forming: <span class="sim__stat-value" id="sim-stat-escaped">—</span></span>
-                            <span>total bounces: <span class="sim__stat-value" id="sim-stat-bounces">—</span></span>
+                            <span>red image y: <span class="sim__stat-value" id="sim-stat-img-r">—</span></span>
+                            <span>green image y: <span class="sim__stat-value" id="sim-stat-img-g">—</span></span>
+                            <span>blue image y: <span class="sim__stat-value" id="sim-stat-img-b">—</span></span>
                         </div>
                     </div>
 
                     <div class="sim__controls" id="sim-controls">
-                        <div class="sim__group">
-                            <p class="sim__group-label">Geometry</p>
+                        <div class="sim__row">
                             <div class="sim__field">
                                 <label for="sim-f1">f<sub>1</sub> (bottom)</label>
-                                <input type="number" id="sim-f1" value="80" step="1" min="10" max="200">
+                                <div class="sim__input-wrap">
+                                    <input type="number" id="sim-f1" value="80" step="1" min="10" max="200">
+                                    <span class="sim__unit">mm</span>
+                                </div>
                             </div>
                             <div class="sim__field">
                                 <label for="sim-f2">f<sub>2</sub> (top)</label>
-                                <input type="number" id="sim-f2" value="80" step="1" min="10" max="200">
+                                <div class="sim__input-wrap">
+                                    <input type="number" id="sim-f2" value="80" step="1" min="10" max="200">
+                                    <span class="sim__unit">mm</span>
+                                </div>
                             </div>
                             <div class="sim__field">
                                 <label for="sim-dsep">d<sub>sep</sub></label>
-                                <input type="number" id="sim-dsep" value="80" step="1" min="20" max="300">
+                                <div class="sim__input-wrap">
+                                    <input type="number" id="sim-dsep" value="80" step="1" min="20" max="300">
+                                    <span class="sim__unit">mm</span>
+                                </div>
                             </div>
                             <div class="sim__field">
                                 <label for="sim-aperture">a (aperture)</label>
-                                <input type="number" id="sim-aperture" value="60" step="1" min="2" max="200">
+                                <div class="sim__input-wrap">
+                                    <input type="number" id="sim-aperture" value="60" step="1" min="2" max="200">
+                                    <span class="sim__unit">mm</span>
+                                </div>
                             </div>
                             <div class="sim__field">
                                 <label for="sim-hobj">h<sub>obj</sub></label>
-                                <input type="number" id="sim-hobj" value="0" step="1" min="0" max="80">
+                                <div class="sim__input-wrap">
+                                    <input type="number" id="sim-hobj" value="0" step="1" min="0" max="80">
+                                    <span class="sim__unit">mm</span>
+                                </div>
                             </div>
-                        </div>
-
-                        <div class="sim__group">
-                            <p class="sim__group-label">Rays</p>
                             <div class="sim__field">
-                                <label for="sim-rays">per LED</label>
-                                <input type="number" id="sim-rays" value="12" step="1" min="3" max="60">
+                                <label for="sim-rays">rays / LED</label>
+                                <div class="sim__input-wrap">
+                                    <input type="number" id="sim-rays" value="12" step="1" min="3" max="60">
+                                </div>
                             </div>
                             <div class="sim__field">
                                 <label for="sim-bounces">reflections</label>
-                                <input type="number" id="sim-bounces" value="2" step="1" min="2" max="10">
+                                <div class="sim__input-wrap">
+                                    <input type="number" id="sim-bounces" value="2" step="1" min="2" max="10">
+                                </div>
                             </div>
                         </div>
 
@@ -1558,14 +1586,15 @@
                         }
 
                         // Real 2-D convergence point — where all escaped rays meet.
-                        // Reject results above a sane horizon: near-parallel ray bundles
-                        // (on-axis LED) produce a singular system and a junk far point —
-                        // we treat those as "no finite focus" and just fan the rays.
+                        // Off-axis LEDs in parabolic systems focus much further up than
+                        // on-axis ones (spherical aberration). Use a generous upper bound
+                        // so red/blue markers don't get filtered out, and reject only
+                        // virtual focuses below the aperture or absurdly far singular results.
                         const raw = findConvergence(escapedRays);
                         const imagePoint = (raw
                             && Number.isFinite(raw[0]) && Number.isFinite(raw[1])
                             && raw[1] > p.vy2
-                            && raw[1] < p.vy2 + p.dsep * 3)
+                            && raw[1] < p.vy2 + p.dsep * 12)
                             ? raw : null;
                         return { ledX, objY, traces, imagePoint, color: LED_COLORS[i] };
                     });
@@ -1687,10 +1716,13 @@
                         }
                     });
 
-                    // Stats
+                    // Stats — image y reported as height above the aperture in mm
+                    const fmtImgY = (ip) => ip ? `${(ip[1] - p.vy2).toFixed(1)} mm` : '∞';
                     document.getElementById('sim-stat-traced').textContent = totalTraced;
                     document.getElementById('sim-stat-escaped').textContent = totalEscaped;
-                    document.getElementById('sim-stat-bounces').textContent = totalEscaped * p.nbounces;
+                    document.getElementById('sim-stat-img-r').textContent = fmtImgY(ledData[0].imagePoint);
+                    document.getElementById('sim-stat-img-g').textContent = fmtImgY(ledData[1].imagePoint);
+                    document.getElementById('sim-stat-img-b').textContent = fmtImgY(ledData[2].imagePoint);
                 };
 
                 document.getElementById('sim-run').addEventListener('click', run);
