@@ -1154,6 +1154,96 @@
         }
 
 
+        /* ───────────────────────────────────────────────────────────
+           CHANGELOG — research log of changes to the simulator and
+           optimizer. Each entry is an <article> card; new cards are
+           prepended in source order (newest first). The grid uses
+           auto-fit + minmax to reflow at every viewport without
+           media queries: one column on phone, two on tablet, three
+           on wide screens. min(100%, 22rem) means a single card
+           never overflows narrow screens.
+
+           Tokens only — no hard-coded sizes or colors so the layout
+           inherits theme + responsive behavior automatically.
+           ─────────────────────────────────────────────────────────── */
+        .changelog-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+            gap: var(--space-md);
+            margin-top: var(--space-lg);
+        }
+        .changelog-card {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+            padding: var(--space-md);
+            background: var(--color-bg-surface);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--color-border-subtle);
+        }
+        .changelog-card__meta {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            flex-wrap: wrap;
+            font-size: 0.75rem;
+            font-weight: var(--weight-bold);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--color-text-tertiary);
+        }
+        .changelog-card__date {
+            font-variant-numeric: tabular-nums;
+        }
+        .changelog-card__tag {
+            padding: 0.15rem 0.5rem;
+            border-radius: var(--radius-sm);
+            background: var(--color-bg-primary);
+            color: var(--color-text-secondary);
+            border: 1px solid var(--color-border-subtle);
+            letter-spacing: 0.04em;
+        }
+        .changelog-card__tag--feat   { color: var(--color-accent); border-color: color-mix(in srgb, var(--color-accent) 40%, transparent); }
+        .changelog-card__tag--fix    { color: #E0A33B; border-color: color-mix(in srgb, #E0A33B 40%, transparent); }
+        .changelog-card__tag--break  { color: #E63946; border-color: color-mix(in srgb, #E63946 40%, transparent); }
+        .changelog-card__title {
+            margin: 0;
+            font-size: var(--text-lg, 1.125rem);
+            font-weight: var(--weight-semibold);
+            color: var(--color-text-primary);
+            line-height: 1.3;
+        }
+        .changelog-card__body {
+            margin: 0;
+            font-size: var(--text-base, 1rem);
+            color: var(--color-text-secondary);
+            line-height: 1.55;
+        }
+        .changelog-card__body code {
+            font-family: var(--font-mono);
+            font-size: 0.9em;
+            padding: 0.05em 0.3em;
+            border-radius: var(--radius-sm);
+            background: var(--color-bg-primary);
+        }
+        .changelog-card__why {
+            margin: 0;
+            padding-top: var(--space-sm);
+            border-top: 1px dashed var(--color-border-subtle);
+            font-size: 0.875rem;
+            color: var(--color-text-tertiary);
+            line-height: 1.5;
+        }
+        .changelog-card__why::before {
+            content: "Why ";
+            font-weight: var(--weight-bold);
+            color: var(--color-text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-size: 0.75rem;
+            margin-right: var(--space-xs);
+        }
+
         @media (min-width: 48em) {
             :root { --container-padding: var(--space-lg); }
         }
@@ -1194,6 +1284,7 @@
                     <li><a class="site-nav__link" href="#simulator">Simulator</a></li>
                     <li><a class="site-nav__link" href="#validation">Validation</a></li>
                     <li><a class="site-nav__link" href="#optimizer">Optimizer</a></li>
+                    <li><a class="site-nav__link" href="#changelog">Changelog</a></li>
                     <li><a class="site-nav__link" href="#results">Results</a></li>
                     <li><a class="site-nav__link" href="#roadmap">Roadmap</a></li>
                     <li><a class="site-nav__link" href="#research">Research</a></li>
@@ -1575,6 +1666,70 @@
                             </div>
                         </div>
                     </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- ===========================================
+             CHANGELOG — research log
+             Each <article class="changelog-card"> is one entry.
+             To add a new entry: copy a card, change the date /
+             tag / title / body / why, and prepend it inside
+             .changelog-grid. Newest first.
+             =========================================== -->
+        <section class="section" id="changelog" aria-labelledby="changelog-title">
+            <div class="container">
+                <div class="section__inner">
+                    <p class="section__eyebrow">Changelog</p>
+                    <h2 id="changelog-title" class="section__title">Research log of <span class="gradient-text">changes and findings</span>.</h2>
+                </div>
+
+                <div class="changelog-grid">
+
+                    <article class="changelog-card">
+                        <div class="changelog-card__meta">
+                            <time class="changelog-card__date" datetime="2026-05-09">2026-05-09</time>
+                            <span class="changelog-card__tag changelog-card__tag--fix">fix</span>
+                            <span class="changelog-card__tag">build compact-knee</span>
+                        </div>
+                        <h3 class="changelog-card__title">Optimizer over-sized devices by ~8×.</h3>
+                        <p class="changelog-card__body">Two changes. Picker tolerance was an absolute 1° from the max viewing angle; replaced with <code>≥ 90% of max</code>. Spot-RMS cap was a flat <code>1 mm</code>; replaced with <code>max(1 mm, Ø_obj × 5%)</code>.</p>
+                        <p class="changelog-card__why">A 50 × 50 mm object had been forcing <code>d_sep = 720 mm</code>, <code>D = 2 m</code>. Both bounds were research-grade absolutes that ignored object scale. The new picker reads the natural knee of the angle-vs-scale curve; the new spot cap matches the optical-engineering rule of thumb that "sharp" is RMS relative to image size. Same object now optimizes at <code>d_sep ≈ 314 mm</code>, <code>D ≈ 850 mm</code> with a wider intersect viewing angle.</p>
+                    </article>
+
+                    <article class="changelog-card">
+                        <div class="changelog-card__meta">
+                            <time class="changelog-card__date" datetime="2026-05-08">2026-05-08</time>
+                            <span class="changelog-card__tag changelog-card__tag--feat">feat</span>
+                            <span class="changelog-card__tag">build inverse-design</span>
+                        </div>
+                        <h3 class="changelog-card__title">d_sep is now a search variable.</h3>
+                        <p class="changelog-card__body">Two-level search: outer loop scans 7 d_sep values geometrically spaced from a physical floor up to ~12× that floor; inner loop runs the existing 15 × 15 × 6 ratio grid + Nelder-Mead at each scale. Output reports a scale curve <code>d_sep → angle</code> showing how the trade saturates with device size.</p>
+                        <p class="changelog-card__why">User specifies only the object (h_obj, Ø_obj); the optimizer should find the entire device, including its size. Holding d_sep fixed at the user's slider value broke that — the optimizer would refuse to find a working device for objects too large for the chosen scale, even though a larger device would have worked.</p>
+                    </article>
+
+                    <article class="changelog-card">
+                        <div class="changelog-card__meta">
+                            <time class="changelog-card__date" datetime="2026-05-08">2026-05-08</time>
+                            <span class="changelog-card__tag changelog-card__tag--break">rewrite</span>
+                            <span class="changelog-card__tag">build e122185</span>
+                        </div>
+                        <h3 class="changelog-card__title">Dimensionless ratios + intersect viewing angle.</h3>
+                        <p class="changelog-card__body">Search variables changed from absolute mm <code>(f₁, f₂, d_sep, a)</code> to dimensionless ratios <code>(r₁, r₂, r_a) = (f₁/d_sep, f₂/d_sep, a/D)</code>. Objective changed from "max half-angle of any single ray" to the angular cone in which all three LED images are simultaneously visible (intersection of per-LED escape windows). Hard constraints — image at aperture plane, spot RMS &lt; 1 mm, ≥ 50% rays escape — replaced soft penalties.</p>
+                        <p class="changelog-card__why">Single-ray max angle had discretization noise at the same scale as the optimization gain we were searching for, and absolute parameters made the answer scale-dependent. Ratios make the answer scale-invariant; intersect-width is a proper viewing-cone metric used in optical engineering; hard constraints stop the optimizer from "cheating" by widening the aperture to escape more rays.</p>
+                    </article>
+
+                    <article class="changelog-card">
+                        <div class="changelog-card__meta">
+                            <time class="changelog-card__date" datetime="2026-05-08">2026-05-08</time>
+                            <span class="changelog-card__tag changelog-card__tag--feat">feat</span>
+                            <span class="changelog-card__tag">build 398531c</span>
+                        </div>
+                        <h3 class="changelog-card__title">Optimize Shape button — first version.</h3>
+                        <p class="changelog-card__body">Adds a Nelder-Mead simplex over <code>(f₁, f₂, d_sep, a)</code> that holds the user's object fixed and searches for the geometry that maximizes viewing angle. Reuses <code>traceRay</code> / <code>findConvergence</code> in a DOM-free evaluator so the optimizer and the displayed simulator share physics.</p>
+                        <p class="changelog-card__why">Establishes the inverse-design pattern: user defines what they want to image, sim works backward to the device. First implementation had the wrong objective and a too-narrow search space — superseded by the rewrite below — but proved the architecture: the trace engine and the optimizer can share one source of truth.</p>
+                    </article>
 
                 </div>
             </div>
