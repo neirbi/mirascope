@@ -1731,6 +1731,10 @@
                             <button type="button" class="sim__run" id="sim-run">Run Simulation</button>
                             <button type="button" class="sim__btn-secondary" id="sim-validate">Validate Physics</button>
                             <button type="button" class="sim__btn-secondary" id="sim-optimize">Optimize Shape</button>
+                            <label class="sim__opt-toggle" style="display:inline-flex;align-items:center;gap:0.5rem;font-size:0.875rem;color:var(--color-text-secondary);cursor:pointer;">
+                                <input type="checkbox" id="sim-symmetric" style="margin:0;cursor:pointer;">
+                                Symmetric (f₁ = f₂ = d_sep)
+                            </label>
                         </div>
 
                         <!-- Optimizer readout. Hidden until Optimize Shape has run.
@@ -2377,9 +2381,16 @@
                         // viewBox. 3·d_sep covers every realistic image height.
                         const raw = findConvergence(escapedRays);
                         let imagePoint = null;
+                        // Match evalLED's stricter aperture-plane criterion: a
+                        // real, viewable image lies at or just above the aperture
+                        // plane. Images below vy2 are inside the cavity (not
+                        // viewable through the hole); images way above are
+                        // diverging beams. Range [vy2 − 0.5, vy2 + dsep/2]
+                        // matches the optimizer's evalLED so the displayed
+                        // simulator and the optimizer agree on what counts as a
+                        // valid image.
                         if (raw && Number.isFinite(raw[0]) && Number.isFinite(raw[1])) {
-                            const m2SurfY = p.vy2 - (raw[0] * raw[0]) / (4 * p.f2);
-                            if (raw[1] >= m2SurfY - 0.5 && raw[1] < p.vy2 + p.dsep * 3) {
+                            if (raw[1] >= p.vy2 - 0.5 && raw[1] <= p.vy2 + p.dsep * 0.5) {
                                 imagePoint = raw;
                             }
                         }
@@ -2817,12 +2828,37 @@
                 // at any boundary on the first pass.
                 const R_LO_DEFAULT = 0.6, R_HI_DEFAULT = 2.4, R_STEPS = 15;
                 const RA_VALUES_DEFAULT = [0.08, 0.10, 0.12, 0.15, 0.18, 0.22, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50];
-                const searchAtScale = (dsep, h_obj, obj_d, nbounces, nraysOpt, bounds, viewDist, sharpArcmin) => {
+                const searchAtScale = (dsep, h_obj, obj_d, nbounces, nraysOpt, bounds, viewDist, sharpArcmin, symmetric) => {
                     const R_LO = bounds.rLo, R_HI = bounds.rHi;
                     const RA_VALUES = bounds.raValues;
                     const dr = (R_HI - R_LO) / (R_STEPS - 1);
                     let best = null;
                     let bestRa = null;
+                    if (symmetric) {
+                        // Symmetric mode: f₁ = f₂ (canonical mirascope family).
+                        // Enforced as r₁ = r₂ throughout. Inner search collapses
+                        // from 2D grid (r₁, r₂) to 1D scan — much faster.
+                        for (const ra of RA_VALUES) {
+                            for (let i = 0; i < R_STEPS; i++) {
+                                const r = R_LO + i * dr;
+                                const c = scoreCandidate(r, r, ra, dsep, h_obj, obj_d, nbounces, nraysOpt, viewDist, sharpArcmin);
+                                if (c && (!best || c.score > best.score)) { best = c; bestRa = ra; }
+                            }
+                        }
+                        if (!best) return null;
+                        // 1D Nelder-Mead polish (still using nelderMead2D with x[0]=x[1]).
+                        const objective = (x) => {
+                            const r = Math.min(R_HI, Math.max(R_LO, x[0]));
+                            const c = scoreCandidate(r, r, bestRa, dsep, h_obj, obj_d, nbounces, nraysOpt, viewDist, sharpArcmin);
+                            if (!c) return 1e6;
+                            return -c.score;
+                        };
+                        const polished = nelderMead2D(objective, [best.r1, best.r1], [dr * 0.5, dr * 0.5], 60, 1e-3);
+                        const rPol = Math.min(R_HI, Math.max(R_LO, polished.x[0]));
+                        const pc = scoreCandidate(rPol, rPol, bestRa, dsep, h_obj, obj_d, nbounces, nraysOpt, viewDist, sharpArcmin);
+                        if (pc && pc.score > best.score) best = pc;
+                        return best;
+                    }
                     for (const ra of RA_VALUES) {
                         for (let i = 0; i < R_STEPS; i++) {
                             const r1 = R_LO + i * dr;
@@ -2883,6 +2919,7 @@
                     const h_obj = cur.h_obj, obj_d = cur.obj_d, nbounces = cur.nbounces;
                     const viewDist = Math.max(50, +document.getElementById('sim-view-d').value || 500);
                     const sharpArcmin = Math.max(0.5, +document.getElementById('sim-sharp').value || 5);
+                    const symmetric = !!document.getElementById('sim-symmetric').checked;
                     const spotCapDerived = spotLimitForViewing(viewDist, sharpArcmin);
                     const nraysOpt = 24;
 
@@ -2922,7 +2959,7 @@
                         // Run inner search at each d_sep.
                         tier = [];
                         for (const dsep of dsepCandidates) {
-                            const result = searchAtScale(dsep, h_obj, obj_d, nbounces, nraysOpt, bounds, viewDist, sharpArcmin);
+                            const result = searchAtScale(dsep, h_obj, obj_d, nbounces, nraysOpt, bounds, viewDist, sharpArcmin, symmetric);
                             if (result) tier.push({ dsep, result, score: result.score });
                         }
                         if (tier.length === 0) {
@@ -3056,7 +3093,8 @@
                         ? ` Bounds expanded ${expansions}× (${expansionLog.join('; ')}).`
                         : '';
                     const capStr = spotCapDerived < 1 ? `${(spotCapDerived * 1000).toFixed(0)} µm` : `${spotCapDerived.toFixed(2)} mm`;
-                    summaryEl.textContent = `Intersect viewing angle: ${best.score.toFixed(1)}° (window [${best.intersectMin.toFixed(1)}°, ${best.intersectMax.toFixed(1)}°]). Worst spot RMS ${spotStr} (cap ${capStr} from viewing distance ${viewDist} mm × ${sharpArcmin} arcmin sharpness target). Scale curve (d_sep→angle): ${curve}.${expansionNote}`;
+                    const modeStr = symmetric ? ' [symmetric mode: f₁=f₂=d_sep enforced]' : '';
+                    summaryEl.textContent = `Intersect viewing angle: ${best.score.toFixed(1)}° (window [${best.intersectMin.toFixed(1)}°, ${best.intersectMax.toFixed(1)}°]). Worst spot RMS ${spotStr} (cap ${capStr} from viewing distance ${viewDist} mm × ${sharpArcmin} arcmin sharpness target).${modeStr} Scale curve (d_sep→angle): ${curve}.${expansionNote}`;
                     paramsEl.textContent = `Ratios — r₁=${best.r1.toFixed(3)} · r₂=${best.r2.toFixed(3)} · r_a=${best.ra.toFixed(3)}    |    Absolute — f₁=${f1r} mm · f₂=${f2r} mm · d_sep=${dsepr} mm · a=${ar} mm · D=${best.p.D.toFixed(1)} mm`;
                 };
 
