@@ -1748,6 +1748,19 @@
                     <details class="changelog-item" name="changelog">
                         <summary class="changelog-item__head">
                             <time class="changelog-item__date" datetime="2026-05-09">2026-05-09</time>
+                            <span class="changelog-item__tag changelog-item__tag--fix">fix</span>
+                            <span class="changelog-item__title">Cross-Check KAT was silently no-op — fixed.</span>
+                            <svg class="changelog-item__chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
+                        </summary>
+                        <div class="changelog-item__body">
+                            <p>First Cross-Check KAT release silently validated nothing. The main trace stores bounce points as <code>[x, y]</code> arrays; the independent trace stored them as <code>{x, y}</code> objects. The comparison code accessed <code>.x</code> on both, producing <code>undefined − undefined = NaN</code> at every comparison. NaN never satisfies <code>d &gt; max</code>, so <code>max</code> stayed at its initial 0 and the test reported "PASS, max Δ = 0.00e+0 mm" — entirely vacuously. Fixed by reading both array and object shapes explicitly, and adding a hard guard: any non-finite diff forces FAIL.</p>
+                            <p class="changelog-item__why">This is exactly the confirmation-bias failure mode the user warned about — a test that appears green while doing zero work. The structural lesson: any comparison test must include at least one case it's <em>known to fail on</em> to prove it can fail. Adding that meta-test to the validator is the next step.</p>
+                        </div>
+                    </details>
+
+                    <details class="changelog-item" name="changelog">
+                        <summary class="changelog-item__head">
+                            <time class="changelog-item__date" datetime="2026-05-09">2026-05-09</time>
                             <span class="changelog-item__tag changelog-item__tag--feat">feat</span>
                             <span class="changelog-item__title">Cross-Check KAT — second independent trace implementation.</span>
                             <svg class="changelog-item__chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
@@ -3303,16 +3316,32 @@
                         const indepResult = independentTrace(ledX_xk, objY_xk, ddx, ddy, p);
                         if (!mainResult.escaped || !indepResult) continue;
                         // Compare bounce points position by position.
-                        const main_pts = mainResult.points;
-                        const indep_pts = indepResult.points;
+                        const main_pts = mainResult.points;   // [x, y] arrays
+                        const indep_pts = indepResult.points; // {x, y} objects
                         const n = Math.min(main_pts.length, indep_pts.length);
+                        let badCompare = false;
                         for (let i = 0; i < n; i++) {
-                            const dx_p = main_pts[i].x - indep_pts[i].x;
-                            const dy_p = main_pts[i].y - indep_pts[i].y;
+                            // Main trace: array; independent: object. Different
+                            // shapes by design (different code paths) — read both
+                            // explicitly. If either side is malformed, force fail
+                            // rather than silently producing NaN.
+                            const m = main_pts[i], ind = indep_pts[i];
+                            const mx = Array.isArray(m) ? m[0] : m.x;
+                            const my = Array.isArray(m) ? m[1] : m.y;
+                            const ix = Array.isArray(ind) ? ind[0] : ind.x;
+                            const iy = Array.isArray(ind) ? ind[1] : ind.y;
+                            const dx_p = mx - ix, dy_p = my - iy;
                             const d = Math.sqrt(dx_p * dx_p + dy_p * dy_p);
+                            if (!Number.isFinite(d)) { badCompare = true; break; }
                             xkat_sumSq += d * d;
                             if (d > xkat_max) xkat_max = d;
                             xkat_n++;
+                        }
+                        if (badCompare) {
+                            // Force failure: malformed comparison can't be a PASS.
+                            xkat_max = Infinity;
+                            xkat_n = Math.max(xkat_n, 1);
+                            break;
                         }
                     }
                     if (xkat_n === 0) {
