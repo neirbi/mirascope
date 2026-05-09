@@ -2898,7 +2898,23 @@
                             const result = searchAtScale(dsep, h_obj, obj_d, nbounces, nraysOpt, bounds, viewDist);
                             if (result) tier.push({ dsep, result, score: result.score });
                         }
-                        if (tier.length === 0) break; // infeasible — handled below
+                        if (tier.length === 0) {
+                            // No feasible at any d_sep in current range. The
+                            // tighter the spot cap (closer viewing distance,
+                            // bigger object), the larger the device must be.
+                            // Expand d_sep ceiling and retry rather than
+                            // giving up.
+                            if (expansions < MAX_EXPANSIONS) {
+                                const newCeil = Math.min(20000, bounds.dsepCeil * 3);
+                                if (newCeil > bounds.dsepCeil) {
+                                    bounds.dsepCeil = newCeil;
+                                    expansions++;
+                                    expansionLog.push(`pass ${pass + 1}: no feasible found, dsep_ceil → ${Math.round(newCeil)} mm`);
+                                    continue;
+                                }
+                            }
+                            break; // truly exhausted
+                        }
                         // Pick smallest d_sep within ANGLE_FRAC of max score.
                         const maxScore = Math.max(...tier.map(t => t.score));
                         const acceptable = tier
@@ -2950,7 +2966,8 @@
                     if (!best) {
                         statusEl.textContent = 'no feasible geometry';
                         statusEl.setAttribute('data-status', 'fail');
-                        summaryEl.textContent = `No mirascope geometry between d_sep=${bounds.dsepFloor.toFixed(0)} mm and ${bounds.dsepCeil.toFixed(0)} mm satisfies all constraints (real image at aperture, spot RMS within cap, ≥50% rays escape) for h_obj=${h_obj} mm, Ø_obj=${obj_d} mm.`;
+                        const capStr_f = spotCapDerived < 1 ? `${(spotCapDerived * 1000).toFixed(0)} µm` : `${spotCapDerived.toFixed(2)} mm`;
+                        summaryEl.textContent = `No feasible geometry up to d_sep=${bounds.dsepCeil.toFixed(0)} mm. The viewing-distance criterion (${viewDist} mm → spot cap ${capStr_f}) is too strict for an Ø_obj=${obj_d} mm object at any practical device size. Try increasing viewing distance (e.g. ${(viewDist * 2).toFixed(0)} mm doubles the cap and roughly halves the required device size) or accepting a smaller object.`;
                         paramsEl.textContent = '';
                         return;
                     }
