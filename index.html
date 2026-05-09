@@ -1185,15 +1185,24 @@
         .changelog-item__head::-webkit-details-marker { display: none; }
         .changelog-item__head {
             list-style: none;
-            display: flex;
+            display: grid;
+            grid-template-columns: auto auto 1fr auto;
+            grid-template-areas:
+                "date tag . chevron"
+                "title title title title";
             align-items: center;
-            gap: var(--space-sm);
+            column-gap: var(--space-sm);
+            row-gap: var(--space-xs);
             padding: var(--space-sm) var(--space-md);
-            padding-right: 2.25rem;
             cursor: pointer;
             user-select: none;
-            flex-wrap: wrap;
-            position: relative;
+        }
+        @media (min-width: 48em) {
+            .changelog-item__head {
+                grid-template-columns: auto auto 1fr auto;
+                grid-template-areas: "date tag title chevron";
+                row-gap: 0;
+            }
         }
         .changelog-item__head:hover {
             background: color-mix(in srgb, var(--color-text-primary) 4%, transparent);
@@ -1203,6 +1212,7 @@
             outline-offset: -2px;
         }
         .changelog-item__date {
+            grid-area: date;
             font-variant-numeric: tabular-nums;
             font-family: var(--font-mono);
             font-size: 0.8125rem;
@@ -1210,6 +1220,7 @@
             white-space: nowrap;
         }
         .changelog-item__tag {
+            grid-area: tag;
             padding: 0.15rem 0.5rem;
             border-radius: var(--radius-sm);
             background: var(--color-bg-primary);
@@ -1220,34 +1231,32 @@
             letter-spacing: 0.06em;
             color: var(--color-text-secondary);
             white-space: nowrap;
+            justify-self: start;
         }
         .changelog-item__tag--feat   { color: var(--color-accent); border-color: color-mix(in srgb, var(--color-accent) 40%, transparent); }
         .changelog-item__tag--fix    { color: #E0A33B; border-color: color-mix(in srgb, #E0A33B 40%, transparent); }
         .changelog-item__tag--break  { color: #E63946; border-color: color-mix(in srgb, #E63946 40%, transparent); }
         .changelog-item__title {
-            flex: 1;
+            grid-area: title;
             min-width: 0;
             font-size: var(--text-base, 1rem);
             font-weight: var(--weight-semibold);
             color: var(--color-text-primary);
             line-height: 1.4;
         }
-        /* Chevron pinned to the right edge of the head row. Position
-           absolute so it stays put regardless of how the date / tag /
-           title wrap on narrow viewports. Rotates when [open]. */
+        /* Chevron sits in its own grid cell at the end of the head row.
+           On mobile the head wraps into two rows; chevron stays pinned
+           top-right with the date and tag. Rotates when [open]. */
         .changelog-item__chevron {
-            position: absolute;
-            right: var(--space-md);
-            top: 50%;
-            transform: translateY(-50%);
+            grid-area: chevron;
+            justify-self: end;
             width: 0.875rem;
             height: 0.875rem;
             color: var(--color-text-tertiary);
             transition: transform var(--transition-base);
-            flex-shrink: 0;
         }
         .changelog-item[open] > .changelog-item__head .changelog-item__chevron {
-            transform: translateY(-50%) rotate(90deg);
+            transform: rotate(90deg);
         }
         .changelog-item__body {
             display: flex;
@@ -1314,15 +1323,24 @@
         .roadmap-phase__head::-webkit-details-marker { display: none; }
         .roadmap-phase__head {
             list-style: none;
-            display: flex;
+            display: grid;
+            grid-template-columns: auto auto auto 1fr auto;
+            grid-template-areas:
+                "num status count . chevron"
+                "title title title title title";
             align-items: center;
-            gap: var(--space-sm);
+            column-gap: var(--space-sm);
+            row-gap: var(--space-xs);
             padding: var(--space-sm) var(--space-md);
-            padding-right: 2.25rem;
             cursor: pointer;
             user-select: none;
-            flex-wrap: wrap;
-            position: relative;
+        }
+        @media (min-width: 48em) {
+            .roadmap-phase__head {
+                grid-template-columns: auto 1fr auto auto auto;
+                grid-template-areas: "num title status count chevron";
+                row-gap: 0;
+            }
         }
         .roadmap-phase__head:hover {
             background: color-mix(in srgb, var(--color-text-primary) 4%, transparent);
@@ -1332,6 +1350,7 @@
             outline-offset: -2px;
         }
         .roadmap-phase__num {
+            grid-area: num;
             font-family: var(--font-mono);
             font-size: 0.75rem;
             font-weight: var(--weight-bold);
@@ -1341,7 +1360,7 @@
             white-space: nowrap;
         }
         .roadmap-phase__title {
-            flex: 1;
+            grid-area: title;
             min-width: 0;
             font-size: var(--text-base, 1rem);
             font-weight: var(--weight-semibold);
@@ -1349,6 +1368,7 @@
             line-height: 1.4;
         }
         .roadmap-phase__status {
+            grid-area: status;
             padding: 0.15rem 0.5rem;
             border-radius: var(--radius-sm);
             background: var(--color-bg-primary);
@@ -1359,30 +1379,30 @@
             letter-spacing: 0.06em;
             color: var(--color-text-secondary);
             white-space: nowrap;
+            justify-self: start;
         }
         .roadmap-phase__status--done   { color: var(--color-accent); border-color: color-mix(in srgb, var(--color-accent) 40%, transparent); }
         .roadmap-phase__status--wip    { color: #E0A33B; border-color: color-mix(in srgb, #E0A33B 40%, transparent); }
         .roadmap-phase__status--open   { color: var(--color-text-tertiary); }
         .roadmap-phase__count {
+            grid-area: count;
             font-family: var(--font-mono);
             font-size: 0.8125rem;
             color: var(--color-text-tertiary);
             font-variant-numeric: tabular-nums;
             white-space: nowrap;
+            justify-self: start;
         }
         .roadmap-phase__chevron {
-            position: absolute;
-            right: var(--space-md);
-            top: 50%;
-            transform: translateY(-50%);
+            grid-area: chevron;
+            justify-self: end;
             width: 0.875rem;
             height: 0.875rem;
             color: var(--color-text-tertiary);
             transition: transform var(--transition-base);
-            flex-shrink: 0;
         }
         .roadmap-phase[open] > .roadmap-phase__head .roadmap-phase__chevron {
-            transform: translateY(-50%) rotate(90deg);
+            transform: rotate(90deg);
         }
         .roadmap-checklist {
             list-style: none;
