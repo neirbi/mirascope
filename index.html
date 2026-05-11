@@ -2137,7 +2137,7 @@
                                 <div class="sim__val-summary-row">
                                     <span class="sim__val-label">Optimizer</span>
                                     <span class="sim__val-status" id="sim-opt-status">—</span>
-                                    <span class="sim__val-label" style="margin-left:auto;">build compact-knee · 90%·spot-scaled</span>
+                                    <span class="sim__val-label" style="margin-left:auto;">scale-invariant · min cone 60° · blur ≤ 5%</span>
                                 </div>
                                 <div class="sim__val-summary-row">
                                     <span id="sim-opt-summary">—</span>
@@ -3932,7 +3932,16 @@
                         dsepCeil: Math.max(Math.max(30, h_obj * 1.1, obj_d * 1.2) * 12, 200),
                     };
                     const N_DSEP = 7;
-                    const ANGLE_FRAC = 0.90;
+                    // Minimum acceptable viewing angle in degrees (full cone).
+                    // Set to ~toy class: the user's actual mirascope has a
+                    // ~82° full cone (41° max-half). Floor of 60° gives a
+                    // useful hand-held view without forcing the optimizer to
+                    // upscale just to chase the last few degrees. Replaces
+                    // the old "within 90 % of max angle" rule, which was a
+                    // tie-breaker designed for the old absolute-spot-cap
+                    // objective and overshot device size under the new
+                    // scale-invariant gates.
+                    const MIN_VIEWING_CONE_DEG = 60;
                     const MAX_EXPANSIONS = 3;
                     let tier = [];
                     let best = null;
@@ -3980,11 +3989,18 @@
                             }
                             break; // truly exhausted
                         }
-                        // Pick smallest d_sep within ANGLE_FRAC of max score.
+                        // Pick smallest d_sep that hits the minimum viewing
+                        // cone floor. If nothing in the current tier reaches
+                        // the floor, fall back to the geometry with the
+                        // widest cone (so we report something useful and let
+                        // the bounds-expansion pass widen the search).
                         const maxScore = Math.max(...tier.map(t => t.score));
-                        const acceptable = tier
-                            .filter(t => t.score >= maxScore * ANGLE_FRAC)
+                        const aboveFloor = tier
+                            .filter(t => t.score >= MIN_VIEWING_CONE_DEG)
                             .sort((a, b) => a.dsep - b.dsep);
+                        const acceptable = aboveFloor.length > 0
+                            ? aboveFloor
+                            : tier.sort((a, b) => b.score - a.score);
                         best = acceptable[0].result;
 
                         // Detect boundary hits.
