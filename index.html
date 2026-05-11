@@ -2849,19 +2849,56 @@
                     const k1El = document.getElementById('sim-k1');
                     const K1 = k1El ? +k1El.value : -1;
 
-                    // Derived rim. Guard against zero or negative.
-                    const rimSq = (4 * f1 * f2 * dsep) / (f1 + f2);
-                    const halfW = rimSq > 0 ? Math.sqrt(rimSq) : 0;
-
-                    return {
+                    const p = {
                         f1, f2, dsep, a, h_obj, obj_d, nrays, nbounces,
                         K1,
                         R1: 2 * f1,           // apex radius of curvature (matches parabola at K1=−1)
                         vy1: -dsep / 2,
                         vy2: +dsep / 2,
-                        halfW,
-                        D: 2 * halfW,
                     };
+                    // True rim: where M1's surface (conic) and M2's surface
+                    // (parabola) actually meet. For K1 = −1 this reduces to
+                    // the closed-form formula 4·f₁·f₂·dsep / (f₁+f₂); for any
+                    // other K, M1 rises at a different rate off-axis, so the
+                    // two surfaces meet at a different x — without this fix,
+                    // M1 visibly overshoots M2 at the rim and the device
+                    // isn't physically closed.
+                    p.halfW = computeTrueHalfW(p);
+                    p.D = 2 * p.halfW;
+                    return p;
+                };
+
+                // Bisect to find the x where M1's conic surface meets M2's
+                // parabolic surface. At K1 = −1 we use the analytical formula
+                // for a bit-identical regression check.
+                const computeTrueHalfW = (p) => {
+                    if (p.K1 === -1) {
+                        const rimSq = (4 * p.f1 * p.f2 * p.dsep) / (p.f1 + p.f2);
+                        return rimSq > 0 ? Math.sqrt(rimSq) : 0;
+                    }
+                    // f(x) = sag_M1(x) + sag_M2(x) − dsep.  We want f(x) = 0.
+                    // sag_M2(x) = x²/(4·f₂) (parabola). f(0) = −dsep < 0.
+                    // Search up to the parabolic estimate plus margin, capped
+                    // by the conic's max half-width (R/√(1+K) when K > −1).
+                    const k1 = 1 + p.K1;
+                    const conicMaxX = k1 > 0 ? p.R1 / Math.sqrt(k1) - 1e-3 : Infinity;
+                    const paraEst = Math.sqrt((4 * p.f1 * p.f2 * p.dsep) / (p.f1 + p.f2));
+                    let xHi = Math.min(conicMaxX, paraEst * 2);
+                    const sag = (x) => {
+                        const disc = p.R1 * p.R1 - k1 * x * x;
+                        if (disc < 0) return Infinity;
+                        return (x * x) / (p.R1 + Math.sqrt(disc));
+                    };
+                    const f = (x) => sag(x) + (x * x) / (4 * p.f2) - p.dsep;
+                    // If even at xHi the surfaces don't reach dsep, return that
+                    // ceiling — M1 is shallower than the cavity demands.
+                    if (!Number.isFinite(f(xHi)) || f(xHi) < 0) return xHi;
+                    let xLo = 0;
+                    for (let i = 0; i < 64; i++) {
+                        const xMid = 0.5 * (xLo + xHi);
+                        if (f(xMid) < 0) xLo = xMid; else xHi = xMid;
+                    }
+                    return 0.5 * (xLo + xHi);
                 };
 
                 // Parabola y at x for a mirror.
@@ -3440,6 +3477,45 @@
                         }
                     });
 
+                    // 9-point object visualization — show the user the full
+                    // extent we test. The 3 colored LEDs at the base get rays
+                    // and color (existing behaviour); the remaining 6 sample
+                    // points (mid row + top row) are drawn as smaller open
+                    // circles in the same column colors, plus a faint outline
+                    // box for the object footprint. At h_obj = 0 the rows
+                    // visually collapse to one row, which is correct.
+                    if (p.h_obj > 0 && p.obj_d > 0) {
+                        // Rigid object resting on M1: contact is at the rim
+                        // of the base, so the entire object lifts to the
+                        // mirror's y-value at x = ±obj_d/2.
+                        const yBase = m1SurfaceY(p.obj_d / 2, p);
+                        const yTop = yBase + p.h_obj;
+                        const yMid = yBase + p.h_obj / 2;
+                        // Outline box (object footprint) — faint stroke only.
+                        root.appendChild(make('rect', {
+                            x: -p.obj_d / 2, y: yBase,
+                            width: p.obj_d, height: p.h_obj,
+                            fill: 'none',
+                            stroke: 'var(--color-text-secondary)',
+                            'stroke-width': '0.25',
+                            'stroke-dasharray': '1.5,1',
+                            opacity: '0.6',
+                        }));
+                        // 6 additional sample dots (mid + top, 3 cols each).
+                        for (let col = 0; col < 3; col++) {
+                            const x = ledOffsets[col];
+                            const color = LED_COLORS[col];
+                            for (const y of [yMid, yTop]) {
+                                root.appendChild(make('circle', {
+                                    cx: x, cy: y, r: 1.2,
+                                    fill: 'none',
+                                    stroke: color,
+                                    'stroke-width': '0.4',
+                                }));
+                            }
+                        }
+                    }
+
                     // Stats — derived device dimensions and the resulting image/viewing geometry.
                     // D is computed from the rim formula; depth (sagitta) is D²/(16f) at the rim;
                     // image height is the center LED's convergence above the aperture plane;
@@ -3593,17 +3669,26 @@
                 };
 
                 // Build a params object from ratios + the user's anchor scale.
-                const paramsFromRatios = (r1, r2, ra, dsep, h_obj, obj_d, nbounces) => {
+                const paramsFromRatios = (r1, r2, ra, dsep, h_obj, obj_d, nbounces, K1 = -1) => {
                     const f1 = r1 * dsep, f2 = r2 * dsep;
-                    const rimSq = (4 * f1 * f2 * dsep) / (f1 + f2);
-                    if (rimSq <= 0) return null;
-                    const halfW = Math.sqrt(rimSq);
+                    if (h_obj >= f1) return null;
+                    // Build enough of p for computeTrueHalfW to bisect against.
+                    // The rim is now defined by where M1 (conic, K1) and M2
+                    // (parabola, f2) physically meet — at K1 = −1 this reduces
+                    // to the closed-form 4·f₁·f₂·dsep/(f₁+f₂).
+                    const partial = {
+                        f1, f2, dsep,
+                        K1, R1: 2 * f1,
+                        vy1: -dsep / 2, vy2: dsep / 2,
+                    };
+                    const halfW = computeTrueHalfW(partial);
+                    if (!Number.isFinite(halfW) || halfW <= 0) return null;
                     const D = 2 * halfW;
                     const a = ra * D;
-                    if (h_obj >= f1) return null;
                     if (a >= D) return null;
                     return {
                         f1, f2, dsep, a, h_obj, obj_d,
+                        K1, R1: 2 * f1,
                         nbounces, vy1: -dsep / 2, vy2: dsep / 2,
                         halfW, D,
                     };
@@ -3632,8 +3717,8 @@
                 const ESCAPE_FRAC_MIN = 0.5;
                 const ARCMIN_RAD = (1 / 60) * (Math.PI / 180);
                 const spotLimitForViewing = (viewDist, sharpArcmin) => Math.max(0.05, viewDist * sharpArcmin * ARCMIN_RAD);
-                const scoreCandidate = (r1, r2, ra, dsep, h_obj, obj_d, nbounces, nrays, viewDist, sharpArcmin) => {
-                    const p = paramsFromRatios(r1, r2, ra, dsep, h_obj, obj_d, nbounces);
+                const scoreCandidate = (r1, r2, ra, dsep, h_obj, obj_d, nbounces, nrays, viewDist, sharpArcmin, K1 = -1) => {
+                    const p = paramsFromRatios(r1, r2, ra, dsep, h_obj, obj_d, nbounces, K1);
                     if (!p) return null;
                     const spotCap = spotLimitForViewing(viewDist, sharpArcmin);
                     const ledOffsets = [-obj_d / 2, 0, +obj_d / 2];
@@ -3658,7 +3743,7 @@
                         score: intersectWidth,
                         intersectWidth, intersectMin, intersectMax,
                         worstSpot, p, leds,
-                        r1, r2, ra,
+                        r1, r2, ra, K1: p.K1,
                     };
                 };
 
@@ -3707,7 +3792,7 @@
                 // at any boundary on the first pass.
                 const R_LO_DEFAULT = 0.6, R_HI_DEFAULT = 2.4, R_STEPS = 15;
                 const RA_VALUES_DEFAULT = [0.08, 0.10, 0.12, 0.15, 0.18, 0.22, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50];
-                const searchAtScale = (dsep, h_obj, obj_d, nbounces, nraysOpt, bounds, viewDist, sharpArcmin, symmetric) => {
+                const searchAtScale = (dsep, h_obj, obj_d, nbounces, nraysOpt, bounds, viewDist, sharpArcmin, symmetric, K1 = -1) => {
                     const R_LO = bounds.rLo, R_HI = bounds.rHi;
                     const RA_VALUES = bounds.raValues;
                     const dr = (R_HI - R_LO) / (R_STEPS - 1);
@@ -3720,7 +3805,7 @@
                         for (const ra of RA_VALUES) {
                             for (let i = 0; i < R_STEPS; i++) {
                                 const r = R_LO + i * dr;
-                                const c = scoreCandidate(r, r, ra, dsep, h_obj, obj_d, nbounces, nraysOpt, viewDist, sharpArcmin);
+                                const c = scoreCandidate(r, r, ra, dsep, h_obj, obj_d, nbounces, nraysOpt, viewDist, sharpArcmin, K1);
                                 if (c && (!best || c.score > best.score)) { best = c; bestRa = ra; }
                             }
                         }
@@ -3728,13 +3813,13 @@
                         // 1D Nelder-Mead polish (still using nelderMead2D with x[0]=x[1]).
                         const objective = (x) => {
                             const r = Math.min(R_HI, Math.max(R_LO, x[0]));
-                            const c = scoreCandidate(r, r, bestRa, dsep, h_obj, obj_d, nbounces, nraysOpt, viewDist, sharpArcmin);
+                            const c = scoreCandidate(r, r, bestRa, dsep, h_obj, obj_d, nbounces, nraysOpt, viewDist, sharpArcmin, K1);
                             if (!c) return 1e6;
                             return -c.score;
                         };
                         const polished = nelderMead2D(objective, [best.r1, best.r1], [dr * 0.5, dr * 0.5], 60, 1e-3);
                         const rPol = Math.min(R_HI, Math.max(R_LO, polished.x[0]));
-                        const pc = scoreCandidate(rPol, rPol, bestRa, dsep, h_obj, obj_d, nbounces, nraysOpt, viewDist, sharpArcmin);
+                        const pc = scoreCandidate(rPol, rPol, bestRa, dsep, h_obj, obj_d, nbounces, nraysOpt, viewDist, sharpArcmin, K1);
                         if (pc && pc.score > best.score) best = pc;
                         return best;
                     }
@@ -3743,7 +3828,7 @@
                             const r1 = R_LO + i * dr;
                             for (let j = 0; j < R_STEPS; j++) {
                                 const r2 = R_LO + j * dr;
-                                const c = scoreCandidate(r1, r2, ra, dsep, h_obj, obj_d, nbounces, nraysOpt, viewDist, sharpArcmin);
+                                const c = scoreCandidate(r1, r2, ra, dsep, h_obj, obj_d, nbounces, nraysOpt, viewDist, sharpArcmin, K1);
                                 if (c && (!best || c.score > best.score)) { best = c; bestRa = ra; }
                             }
                         }
@@ -3753,7 +3838,7 @@
                     const objective = (x) => {
                         const r1 = Math.min(R_HI, Math.max(R_LO, x[0]));
                         const r2 = Math.min(R_HI, Math.max(R_LO, x[1]));
-                        const c = scoreCandidate(r1, r2, bestRa, dsep, h_obj, obj_d, nbounces, nraysOpt, viewDist, sharpArcmin);
+                        const c = scoreCandidate(r1, r2, bestRa, dsep, h_obj, obj_d, nbounces, nraysOpt, viewDist, sharpArcmin, K1);
                         if (!c) return 1e6;
                         return -c.score;
                     };
@@ -3761,7 +3846,7 @@
                     const pc = scoreCandidate(
                         Math.min(R_HI, Math.max(R_LO, polished.x[0])),
                         Math.min(R_HI, Math.max(R_LO, polished.x[1])),
-                        bestRa, dsep, h_obj, obj_d, nbounces, nraysOpt, viewDist, sharpArcmin
+                        bestRa, dsep, h_obj, obj_d, nbounces, nraysOpt, viewDist, sharpArcmin, K1
                     );
                     if (pc && pc.score > best.score) best = pc;
                     return best;
@@ -3835,11 +3920,22 @@
                             const t = i / (N_DSEP - 1);
                             dsepCandidates.push(bounds.dsepFloor * Math.pow(bounds.dsepCeil / bounds.dsepFloor, t));
                         }
-                        // Run inner search at each d_sep.
+                        // Run inner search at each d_sep AND at each K1 in the
+                        // shape grid. K1 is the conic constant of M1: −1 is
+                        // the parabolic baseline, 0 is a sphere, intermediate
+                        // values are prolate ellipsoids. We coarse-grid 4
+                        // shapes here — Nelder-Mead inside searchAtScale then
+                        // polishes (r1, r2) at each shape, so the joint best
+                        // is selected by the outer loop here. Bit-identical
+                        // to the previous parabola-only behaviour when K=−1
+                        // wins (which it will for small-object regimes).
                         tier = [];
+                        const K1_GRID = [-1.5, -1.0, -0.5, 0.0];
                         for (const dsep of dsepCandidates) {
-                            const result = searchAtScale(dsep, h_obj, obj_d, nbounces, nraysOpt, bounds, viewDist, sharpArcmin, symmetric);
-                            if (result) tier.push({ dsep, result, score: result.score });
+                            for (const K1try of K1_GRID) {
+                                const result = searchAtScale(dsep, h_obj, obj_d, nbounces, nraysOpt, bounds, viewDist, sharpArcmin, symmetric, K1try);
+                                if (result) tier.push({ dsep, K1: K1try, result, score: result.score });
+                            }
                         }
                         if (tier.length === 0) {
                             // No feasible at any d_sep in current range. The
@@ -3947,6 +4043,15 @@
                     setVal('sim-f2', f2r);
                     setVal('sim-dsep', dsepr);
                     setVal('sim-aperture', ar);
+                    // Push the winning M1 shape back to the K₁ slider so the
+                    // SVG redraw matches the optimizer's claim. The user sees
+                    // the exact geometry that was optimised.
+                    {
+                        const k1El = document.getElementById('sim-k1');
+                        const k1Range = document.getElementById('sim-k1-range');
+                        if (k1El) k1El.value = K1won;
+                        if (k1Range) k1Range.value = K1won;
+                    }
 
                     // Bump rays/LED to ≥24 so the displayed run matches the
                     // optimizer's measurement.
@@ -3974,7 +4079,15 @@
                     const capStr = spotCapDerived < 1 ? `${(spotCapDerived * 1000).toFixed(0)} µm` : `${spotCapDerived.toFixed(2)} mm`;
                     const modeStr = symmetric ? ' [symmetric mode: f₁=f₂=d_sep enforced]' : '';
                     summaryEl.textContent = `Intersect viewing angle: ${best.score.toFixed(1)}° (window [${best.intersectMin.toFixed(1)}°, ${best.intersectMax.toFixed(1)}°]). Worst spot RMS ${spotStr} (cap ${capStr} from viewing distance ${viewDist} mm × ${sharpArcmin} arcmin sharpness target).${modeStr} Scale curve (d_sep→angle): ${curve}.${expansionNote}`;
-                    paramsEl.textContent = `Ratios — r₁=${best.r1.toFixed(3)} · r₂=${best.r2.toFixed(3)} · r_a=${best.ra.toFixed(3)}    |    Absolute — f₁=${f1r} mm · f₂=${f2r} mm · d_sep=${dsepr} mm · a=${ar} mm · D=${best.p.D.toFixed(1)} mm`;
+                    const K1won = (best.K1 !== undefined && best.K1 !== null) ? best.K1 : -1;
+                    const shapeStr = K1won === -1
+                        ? 'M1 shape: parabola (K₁ = −1)'
+                        : K1won === 0
+                            ? 'M1 shape: sphere (K₁ = 0)'
+                            : K1won < -1
+                                ? `M1 shape: hyperboloid (K₁ = ${K1won.toFixed(2)})`
+                                : `M1 shape: prolate ellipsoid (K₁ = ${K1won.toFixed(2)})`;
+                    paramsEl.textContent = `${shapeStr}    |    Ratios — r₁=${best.r1.toFixed(3)} · r₂=${best.r2.toFixed(3)} · r_a=${best.ra.toFixed(3)}    |    Absolute — f₁=${f1r} mm · f₂=${f2r} mm · d_sep=${dsepr} mm · a=${ar} mm · D=${best.p.D.toFixed(1)} mm`;
                 };
 
                 // ─────────────────────────────────────────────────────────
