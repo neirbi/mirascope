@@ -3717,21 +3717,35 @@
                 const ESCAPE_FRAC_MIN = 0.5;
                 const ARCMIN_RAD = (1 / 60) * (Math.PI / 180);
                 const spotLimitForViewing = (viewDist, sharpArcmin) => Math.max(0.05, viewDist * sharpArcmin * ARCMIN_RAD);
+                // Scale-invariant constraints, matching the project's actual
+                // goal ("smallest device that images the object usefully"):
+                //   1. Image must be at least as big as the object (mag ≥ 1×).
+                //   2. Spot RMS must be a small fraction of the image (≤ 5 %).
+                // Both are scale-invariant — they look the same if you scale
+                // the entire device + object by any factor. The previous
+                // absolute spot cap was distance-dependent and forced runaway
+                // device sizes; this version is honest about what humans
+                // actually perceive (relative blur, not absolute µm).
+                //
+                // viewDist + sharpArcmin are still accepted in the signature
+                // for backward compatibility with the call sites, but are not
+                // used in the gates anymore. The relative-blur threshold can
+                // be tightened later if the user explicitly wants a sharper
+                // image; 5 % is the toy-equivalent operating point.
+                const MIN_MAGNIFICATION = 1.0;
+                const MAX_RELATIVE_BLUR = 0.05;
                 const scoreCandidate = (r1, r2, ra, dsep, h_obj, obj_d, nbounces, nrays, viewDist, sharpArcmin, K1 = -1) => {
                     const p = paramsFromRatios(r1, r2, ra, dsep, h_obj, obj_d, nbounces, K1);
                     if (!p) return null;
-                    const spotCap = spotLimitForViewing(viewDist, sharpArcmin);
                     const ledOffsets = [-obj_d / 2, 0, +obj_d / 2];
                     let intersectMin = -Infinity, intersectMax = +Infinity;
                     let worstSpot = 0;
                     const leds = [];
                     for (const ledX of ledOffsets) {
-                        // Constraint: object diameter must fit within rim.
                         if (Math.abs(ledX) >= p.halfW) return null;
                         const led = evalLED(ledX, p, nrays);
                         if (!led) return null;
                         if (led.escaped / led.attempted < ESCAPE_FRAC_MIN) return null;
-                        if (led.spotRMS > spotCap) return null;
                         intersectMin = Math.max(intersectMin, led.minAngle);
                         intersectMax = Math.min(intersectMax, led.maxAngle);
                         if (led.spotRMS > worstSpot) worstSpot = led.spotRMS;
@@ -3739,10 +3753,22 @@
                     }
                     if (intersectMax <= intersectMin) return null;
                     const intersectWidth = intersectMax - intersectMin;
+
+                    // Image diameter from the side LEDs' convergence x-coords.
+                    // If either side LED didn't produce an imagePoint, the
+                    // edge of the object isn't imaged → fail.
+                    const redImg = leds[0].imagePoint;
+                    const blueImg = leds[2].imagePoint;
+                    if (!redImg || !blueImg) return null;
+                    const imageDiameter = Math.abs(blueImg[0] - redImg[0]);
+                    if (imageDiameter < MIN_MAGNIFICATION * obj_d) return null;
+                    const relativeBlur = worstSpot / imageDiameter;
+                    if (relativeBlur > MAX_RELATIVE_BLUR) return null;
+
                     return {
                         score: intersectWidth,
                         intersectWidth, intersectMin, intersectMax,
-                        worstSpot, p, leds,
+                        worstSpot, imageDiameter, relativeBlur, p, leds,
                         r1, r2, ra, K1: p.K1,
                     };
                 };
@@ -4018,8 +4044,7 @@
                     if (!best) {
                         statusEl.textContent = 'no feasible geometry';
                         statusEl.setAttribute('data-status', 'fail');
-                        const capStr_f = spotCapDerived < 1 ? `${(spotCapDerived * 1000).toFixed(0)} µm` : `${spotCapDerived.toFixed(2)} mm`;
-                        summaryEl.textContent = `No feasible geometry up to d_sep=${bounds.dsepCeil.toFixed(0)} mm. The viewing-distance criterion (${viewDist} mm → spot cap ${capStr_f}) is too strict for an Ø_obj=${obj_d} mm object at any practical device size. Try increasing viewing distance (e.g. ${(viewDist * 2).toFixed(0)} mm doubles the cap and roughly halves the required device size) or accepting a smaller object.`;
+                        summaryEl.textContent = `No feasible geometry up to d_sep=${bounds.dsepCeil.toFixed(0)} mm with image ≥ ${(MIN_MAGNIFICATION).toFixed(1)}× object and spot RMS ≤ ${(MAX_RELATIVE_BLUR * 100).toFixed(0)} % of image. For an Ø_obj=${obj_d} mm object, no parabolic-family geometry within the search bounds simultaneously magnifies and stays below the relative-blur threshold. Try a smaller object, a different magnification target, or an aspheric M1 (not yet in this search).`;
                         paramsEl.textContent = '';
                         return;
                     }
@@ -4079,9 +4104,11 @@
                     const expansionNote = expansions > 0
                         ? ` Bounds expanded ${expansions}× (${expansionLog.join('; ')}).`
                         : '';
-                    const capStr = spotCapDerived < 1 ? `${(spotCapDerived * 1000).toFixed(0)} µm` : `${spotCapDerived.toFixed(2)} mm`;
                     const modeStr = symmetric ? ' [symmetric mode: f₁=f₂=d_sep enforced]' : '';
-                    summaryEl.textContent = `Intersect viewing angle: ${best.score.toFixed(1)}° (window [${best.intersectMin.toFixed(1)}°, ${best.intersectMax.toFixed(1)}°]). Worst spot RMS ${spotStr} (cap ${capStr} from viewing distance ${viewDist} mm × ${sharpArcmin} arcmin sharpness target).${modeStr} Scale curve (d_sep→angle): ${curve}.${expansionNote}`;
+                    const imgDStr = (best.imageDiameter !== undefined) ? `${best.imageDiameter.toFixed(1)} mm` : '—';
+                    const magStr = (best.imageDiameter !== undefined) ? `${(best.imageDiameter / obj_d).toFixed(2)}×` : '—';
+                    const relBlurStr = (best.relativeBlur !== undefined) ? `${(best.relativeBlur * 100).toFixed(1)} %` : '—';
+                    summaryEl.textContent = `Intersect viewing angle: ${best.score.toFixed(1)}° (window [${best.intersectMin.toFixed(1)}°, ${best.intersectMax.toFixed(1)}°]). Image Ø ${imgDStr} (${magStr} object diameter) · worst spot RMS ${spotStr} = ${relBlurStr} of image (≤ ${(MAX_RELATIVE_BLUR * 100).toFixed(0)} % target).${modeStr} Scale curve (d_sep→angle): ${curve}.${expansionNote}`;
                     const shapeStr = K1won === -1
                         ? 'M1 shape: parabola (K₁ = −1)'
                         : K1won === 0
